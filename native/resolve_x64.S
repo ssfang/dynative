@@ -1,9 +1,17 @@
 
+/*
+https://gcc.gnu.org/onlinedocs/gcc/Overall-Options.html
+
+file.s          Assembler code.
+file.S, file.sx Assembler code that must be preprocessed.
+
+*/
 #ifdef __x86_64__
-.text
+
 .globl stubthunk_interpret_stdcall_x64
 .extern dispatch
 
+.text
 stubthunk_interpret_stdcall_x64:
 	push   %rbp					/* 55 */
  	mov    %rsp, %rbp			/* 48 89 e5 */

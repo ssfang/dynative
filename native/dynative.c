@@ -84,24 +84,13 @@
 #define ATTR_NAKED __declspec(naked)
 #endif
 
-
-void dispatch(size_t argsize) {
+void dispatch(size_t argsize) asm("dispatch");
+void dispatch(size_t argsize){
 	//int argsize;
 	_tprintf(_T("------dispatch, %d\n"), (int)argsize);
 }
 
 typedef int *mid_t;
-
-// short data = DIRECTIVE2(89, E5) ==> short data = (char[]){0x89, 0xE5};
-#define DIRECTIVE2(a, b) (char[]){0x##a, 0x##b}
-
-#define TYPEDEF_TYPE_BYTES(NAME, TYPE) typedef union{\
-		char bytes[sizeof(TYPE)];\
-		TYPE data;\
-	}NAME
-
-//directive2
-TYPEDEF_TYPE_BYTES(directive2, uint16_t);
 
 #if !defined(_MSC_VER)
 #pragma pack(1) /* Specify packing alignment for structure members as 1 byte boundary*/
@@ -135,7 +124,7 @@ const stubthunk_x86 stubthunk_x86_templet = {
 	, { 0xE9, st_placeholder(rel32_offset) } // jmp rel32_offset
 };
 
-extern void stubthunk_interpret_stdcall_x64(void);
+extern void stubthunk_interpret_stdcall_x86(void) asm("stubthunk_interpret_stdcall_x86");
 #define stubthunk stubthunk_x86
 #define stubthunk_templet stubthunk_x86_templet
 #define stubthunk_MID_SLOT [ebp-4]
@@ -145,7 +134,7 @@ extern void stubthunk_interpret_stdcall_x64(void);
 void stubthunk_x86_init(stubthunk_x86 *stub, mid_t mid) {
 	memcpy(stub, &stubthunk_templet, sizeof(stubthunk));
 	stub->ph_mid = mid;
-	stub->ph_ip_to_dispatch = (int) ((uintptr_t) dispatch - ((uintptr_t) stub + sizeof(stubthunk)));
+	stub->ph_ip_to_dispatch = (int32_t) ((uintptr_t) stubthunk_interpret_stdcall_x86 - ((uintptr_t) stub + sizeof(stubthunk)));
 }
 
 #elif defined(__x86_64__)
@@ -169,7 +158,7 @@ const stubthunk_x64 stubthunk_x64_templet = {
 	, { 0xFF, 0xE0 } //jmp   rax
 };
 
-extern void stubthunk_interpret_stdcall_x64(void);
+extern void stubthunk_interpret_stdcall_x64(void) asm("stubthunk_interpret_stdcall_x64");
 #define stubthunk stubthunk_x64
 #define stubthunk_templet stubthunk_x64_templet
 #define stubthunk_MID_SLOT rcx
@@ -195,34 +184,6 @@ void stubthunk_x64_init(stubthunk_x64 *stub, mid_t mid) {
 union verify_stubthunk_size_manually {
 	char stubthunk_size[STUBTHUNK_SIZE == sizeof(stubthunk) ? 1 : -STUBTHUNK_SIZE];
 };
-
-
-void stubthunk_write(void *stub, mid_t mid) {
-	char *pstub = (char *) stub;
-
-	//push  ebp
-	*pstub++ = 0x55;
-
-	//mov   ebp, esp
-	*pstub++ = 0x89;
-	*pstub++ = 0xE5;
-
-	//sub   esp, imm8_local_size
-	*pstub++ = 0x83;
-	*pstub++ = 0xEC;
-	*pstub++ = (char) sizeof(mid_t);
-
-	//mov   [ebp-4], imm_ptr_mid
-	*pstub++ = 0xC7;
-	*pstub++ = 0x45;
-	*pstub++ = 0xFC;
-	*(mid_t*) pstub = mid;
-	pstub += sizeof(mid_t);
-
-	//jmp   rel16_offset
-	*pstub++ = 0xE9;
-	*(int*) pstub = (int) ((uintptr_t) dispatch - ((uintptr_t) stub + 18));
-}
 
 void stubthunk_call_test(void *stub) {
 
@@ -325,11 +286,7 @@ int set_executable(void* addr, size_t size) {
  * i686-w64-mingw32-gcc.exe dynative.c resolve_x86.S -o dynative_win86.exe
  * x86_64-w64-mingw32-gcc.exe dynative.c resolve_x64.S -o dynative_win64.exe
  **/
-int main(int _UNUSED(argc), char *argv[], char *env[]) {
-	UNUSED(argv);
-	UNUSED(env);
-
-	int retval = 0;
+int main(int argc, char *argv[]) {
 	void *p = (void*)0x1234567890123456;
 
 	_tprintf(_T("sizeof(_stubthunk) = %d, %p\n"), (int) sizeof(stubthunk), p);
@@ -337,17 +294,11 @@ int main(int _UNUSED(argc), char *argv[], char *env[]) {
 	mid_t mid = (mid_t) (argc == 2 ? strtoul(argv[1], NULL, 0) : 123456);
 
 	stubthunk *stub = (stubthunk*)alloc_code(sizeof(stubthunk));
-	//stubthunk *stub = (stubthunk *) malloc(sizeof(stubthunk));
 	assert(NULL != stub);
 
 	stubthunk_init(stub, mid);
+	stubthunk_call_test(stub);
 
-	//retval = set_executable(stub, sizeof(stubthunk));
-	//assert(0 == retval);
-
-	if(0 == retval){
-		stubthunk_call_test(stub);
-	}
 	return 0;
 }
 

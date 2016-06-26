@@ -1,8 +1,10 @@
 
 #ifdef __i386__
-.text
+
 .globl stubthunk_interpret_stdcall_x86
-.extern _dispatch
+.extern dispatch
+
+.text
 
 stubthunk_interpret_stdcall_x86:
 	push   %ebp					/* 55 */
@@ -12,7 +14,7 @@ stubthunk_interpret_stdcall_x86:
 
 	/* expect like [invoke PROC proto](https://support.microsoft.com/en-us/kb/73407) */
  	push   %eax			/* size_t argsize */
-	call   _dispatch
+	call   dispatch
 
  	leave	/* restore the local scoped stack frame considering `call dispatch`*/
  	leave	/* restore the stack frame of the interpreted stdcall */
