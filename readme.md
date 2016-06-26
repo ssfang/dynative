@@ -34,7 +34,7 @@ In `asm`
 .globl stubthunk_interpret_stdcall_x64
 
 .text
-bar:
+mybar:
     call func
 ```
 
