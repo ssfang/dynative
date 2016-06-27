@@ -1,7 +1,8 @@
 #include "jn.h"
 #include "jni.h"
 
-jint Java_ss_Jn_registerNativeMethodStub(JNIEnv *env, jclass cls, jobject method, jclass clazz,
+//http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/functions.html#registering_native_methods
+JNIEXPORT jint JNICALL Java_ss_Jn_registerNativeMethodStub(JNIEnv *env, jclass cls, jobject method, jclass clazz,
 		jstring name, jstring signature, jint argsize) {
 
 	const char* utfName = jniGetStringUTFChars(env, name, 0);
@@ -9,9 +10,9 @@ jint Java_ss_Jn_registerNativeMethodStub(JNIEnv *env, jclass cls, jobject method
 
 	// TODO release stubthunk *stub
 	stubthunk *stub = (stubthunk*) alloc_code(sizeof(stubthunk));
-	stubthunk_init(stub, (mid_t) argsize);
+	stubthunk_init(stub, (mid_t)(intptr_t) argsize);
 
-	struct JNINativeMethod methods = { utfName, utfSignature, stub };
+	JNINativeMethod methods = { CONST_CAST(char*, utfName), CONST_CAST(char*, utfSignature), stub };
 
 	jint retval = jniRegisterNatives(env, clazz, &methods, 1);
 

@@ -13,7 +13,6 @@
 # include <sys/mman.h>
 /* [cacheflush](http://man7.org/linux/man-pages/man2/cacheflush.2.html) */
 // #include <asm/cachectl.h>
-
 #ifdef	_UNICODE
 #define _tprintf wprintf
 /*
@@ -33,12 +32,52 @@
 #include <windows.h>
 # endif
 
-void dispatch(size_t argsize) asm("dispatch");
-void dispatch(size_t argsize){
-	//int argsize;
-	_tprintf(_T("------dispatch, %d\n"), (int)argsize);
+void dispatch(size_t argsize) ASM("dispatch");
+
+#define st_placeholder(x) 0
+
+#ifdef SUPPORT_X86
+
+#define stubthunk_MID_SLOT eax
+
+extern void stubthunk_interpret_stdcall_x86(void) ASM("stubthunk_interpret_stdcall_x86");
+
+static const stubthunk_x86 stubthunk_x86_templet = {
+	{	0xB8, st_placeholder(imm_ptr_mid)}  // mov eax, imm_ptr_mid
+	, {	0xE9, st_placeholder(rel32_offset)} // jmp rel32_offset
+};
+
+void stubthunk_x86_init(stubthunk_x86 *stub, mid_t mid) {
+	memcpy(stub, &stubthunk_x86_templet, sizeof(stubthunk));
+	stub->ph_mid = (uint32_t)mid;
+	stub->ph_ip_to_dispatch = (uint32_t) ((uintptr_t) stubthunk_interpret_stdcall_x86 - ((uintptr_t) stub + sizeof(stubthunk)));
+}
+#endif
+
+#ifdef SUPPORT_X64
+
+#define stubthunk_MID_SLOT rcx
+
+extern void stubthunk_interpret_stdcall_x64(void) ASM("stubthunk_interpret_stdcall_x64");
+
+static const stubthunk_x64 stubthunk_x64_templet = {
+	{ { 0x48, 0xB9 }, st_placeholder(imm_ptr_mid) } //mov imm_ptr_mid, %rcx
+	, { { 0x48, 0xB8 }, st_placeholder(imm_ptr_dispatch) } //mov imm_ptr_dispatch, %rax
+	, { 0xFF, 0xE0 } //jmp   rax
+};
+
+void stubthunk_x64_init(stubthunk_x64 *stub, mid_t mid) {
+	memcpy(stub, &stubthunk_x64_templet, sizeof(stubthunk));
+	stub->ph_mid = (uint64_t)mid;
+	stub->ph_dispatch = (uint64_t)FUNC2PTR(stubthunk_interpret_stdcall_x64);
 }
 
+#endif
+
+void dispatch(size_t argsize) {
+	//int argsize;
+	_tprintf(_T("------dispatch, %d\n"), (int) argsize);
+}
 
 void stubthunk_call_test(void *stub) {
 
@@ -60,7 +99,7 @@ void stubthunk_call_test(void *stub) {
 }
 
 //return NULL if failed.
-void *alloc_code(size_t size){
+void *alloc_code(size_t size) {
 	void *code;
 #ifdef _WIN32
 	//https://msdn.microsoft.com/en-us/library/windows/desktop/aa366887(v=vs.85).aspx
@@ -68,8 +107,8 @@ void *alloc_code(size_t size){
 	return code;
 #else
 	//http://man7.org/linux/man-pages/man2/mmap.2.html
-	code = mmap(NULL, size, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-	if(MAP_FAILED != code){
+	code = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (MAP_FAILED != code) {
 		return code;
 	}
 	_tprintf(_T("errno(%d):%s\n"), errno, strerror(errno));
@@ -89,7 +128,7 @@ int set_executable(void* addr, size_t size) {
 		// __in SIZE_T dwSize
 		//);
 		if(FlushInstructionCache(GetCurrentProcess(), addr, size))
-			return 0;
+		return 0;
 	}
 	TCHAR szMessageBuffer[128];
 	DWORD_PTR dwError = GetLastError();
@@ -114,9 +153,10 @@ int set_executable(void* addr, size_t size) {
 	 * the address range in the interval [addr, addr+len-1].  addr must be aligned to a page boundary.
 	 * [mprotect](http://man7.org/linux/man-pages/man2/mprotect.2.html)
 	 */
-	if(0 == mprotect(REINTERPRET_CAST(void *, start), end - start, PROT_READ | PROT_WRITE | PROT_EXEC)){
+	if (0 == mprotect(REINTERPRET_CAST(void *, start), end - start,
+	PROT_READ | PROT_WRITE | PROT_EXEC)) {
 
-	}else{
+	} else {
 		_tprintf(_T("errno(%d):%s\n"), errno, strerror(errno));
 		return -1;
 	}
@@ -133,7 +173,6 @@ int set_executable(void* addr, size_t size) {
 	return 0;
 }
 
-
 /**
  * objcopy --only-keep-debug "${tostripfile.exe}" "${debugfile.pdb}"
  *
@@ -142,20 +181,20 @@ int set_executable(void* addr, size_t size) {
  * x86_64-w64-mingw32-gcc.exe dynative.c resolve_x64.S -o dynative_win64.exe
  **/
 /*
-int main(int argc, char *argv[]) {
-	void *p = (void*)0x1234567890123456;
+ int main(int argc, char *argv[]) {
+ void *p = (void*)0x1234567890123456;
 
-	_tprintf(_T("sizeof(_stubthunk) = %d, %p\n"), (int) sizeof(stubthunk), p);
+ _tprintf(_T("sizeof(_stubthunk) = %d, %p\n"), (int) sizeof(stubthunk), p);
 
-	mid_t mid = (mid_t) (argc == 2 ? strtoul(argv[1], NULL, 0) : 123456);
+ mid_t mid = (mid_t) (argc == 2 ? strtoul(argv[1], NULL, 0) : 123456);
 
-	stubthunk *stub = (stubthunk*)alloc_code(sizeof(stubthunk));
-	assert(NULL != stub);
+ stubthunk *stub = (stubthunk*)alloc_code(sizeof(stubthunk));
+ assert(NULL != stub);
 
-	stubthunk_init(stub, mid);
-	stubthunk_call_test(stub);
+ stubthunk_init(stub, mid);
+ stubthunk_call_test(stub);
 
-	return 0;
-}
-*/
+ return 0;
+ }
+ */
 

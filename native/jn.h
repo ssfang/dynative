@@ -1,5 +1,5 @@
 #include <assert.h>
- /* expect int32_t, uintptr_t, INT32_MAX ...*/
+/* expect int32_t, uintptr_t, INT32_MAX ...*/
 #include <stdint.h>
 #include <string.h>
 
@@ -8,7 +8,6 @@
 
 #ifndef _Included_ss_Jn
 #define _Included_ss_Jn
-
 
 //#if !defined(UNUSED)
 #if defined(__GNUC__)
@@ -40,7 +39,6 @@
 #define ALIGN_DOWN(addr, align) ((((intptr_t) (addr))) & ~((align) - 1))
 #define ALIGN_UP(addr, align) ((((intptr_t) (addr)) + ((align) - 1)) & ~((align) - 1))
 
-
 /**
  * naked
  * Use this attribute on the ARM, AVR, C4x and IP2K ports to indicate that the specified
@@ -56,6 +54,18 @@
 #define ATTR_NAKED __declspec(naked)
 #endif
 
+#if defined(_MSC_VER)
+#define GNU_ATTR(...)
+#define ASM(...)
+#else
+// https://gcc.gnu.org/onlinedocs/gcc/Attribute-Syntax.html#Attribute-Syntax
+//[Type Attributes], [attribute specifier list: names with ‘__’ preceding and following the name]
+#define GNU_ATTR(...) __attribute__((__VA_ARGS__))
+#define ASM asm
+#endif
+
+/* Useful for eliminating compiler warnings, forcedly reinterpret cast */
+#define FUNC2PTR(f) ((void*)f)
 
 #ifdef __cplusplus
 extern "C" {
@@ -68,105 +78,89 @@ extern "C" {
 JNIEXPORT jint JNICALL Java_ss_Jn_registerNativeMethodStub(JNIEnv *, jclass, jobject, jclass, jstring,
 		jstring, jint argsize);
 
+
+
 typedef int *mid_t;
 
-#if !defined(_MSC_VER)
+//[attribute packed broken on mingw32?](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=52991)
+#if defined(_MSC_VER) || defined(__MINGW32__)
 #pragma pack(1) /* Specify packing alignment for structure members as 1 byte boundary*/
-#define GNU_ATTR(...)
-#else
-// https://gcc.gnu.org/onlinedocs/gcc/Attribute-Syntax.html#Attribute-Syntax
-//[Type Attributes], [attribute specifier list: names with ‘__’ preceding and following the name]
-#define GNU_ATTR(...) __attribute__((__VA_ARGS__))
 #endif
 
-#define st_placeholder(x) 0
+// https://sourceforge.net/p/predef/wiki/Architectures/
 //#ifdef __LP64__ || _LP64
-#if defined(__i386__)
-// IA-32
-typedef struct GNU_ATTR(__packed__) _stubthunk_x86 {
-	struct GNU_ATTR(__packed__){
-		char mov_eax_imm_ptr;  // B8
-		// placeholder: a local hard-code pointer variable but this whole code is dynamically created.
-		mid_t ph_mid;
-	};
-
-	struct GNU_ATTR(__packed__){
-		// placeholder: relative displacement to eip based on the end address of this structure.
-		char jmp_rel32;         // E9
-		int32_t ph_ip_to_dispatch; //
-	};
-} stubthunk_x86;
-
-const stubthunk_x86 stubthunk_x86_templet = {
-	  { 0xB8, st_placeholder(imm_ptr_mid) }  // mov eax, imm_ptr_mid
-	, { 0xE9, st_placeholder(rel32_offset) } // jmp rel32_offset
-};
-
-extern void stubthunk_interpret_stdcall_x86(void) asm("stubthunk_interpret_stdcall_x86");
-#define stubthunk stubthunk_x86
-#define stubthunk_templet stubthunk_x86_templet
-#define stubthunk_MID_SLOT [ebp-4]
-#define STUBTHUNK_SIZE 10
-#define stubthunk_init stubthunk_x86_init
-
-inline void stubthunk_x86_init(stubthunk_x86 *stub, mid_t mid) {
-	memcpy(stub, &stubthunk_templet, sizeof(stubthunk));
-	stub->ph_mid = mid;
-	stub->ph_ip_to_dispatch = (int32_t) ((uintptr_t) stubthunk_interpret_stdcall_x86 - ((uintptr_t) stub + sizeof(stubthunk)));
-}
-
-#elif defined(__x86_64__)
-// AMD64, as to some directives, it will prefix 48 against on x86
-typedef struct GNU_ATTR(__packed__) _stubthunk_x64 {
-	struct GNU_ATTR(__packed__){
-		char mov_rcx_imm64[2];  // 48 B9
-		mid_t ph_mid;
-	};
-	struct GNU_ATTR(__packed__){
-		char mov_rax_imm64[2];  // 48 B8
-		void* ph_dispatch;
-	};
-	char jmp_rax[2]; // FF E0
-	char pad[2]; //09 00
-} stubthunk_x64;
-
-const stubthunk_x64 stubthunk_x64_templet = {
-	{ { 0x48, 0xB9 }, st_placeholder(imm_ptr_mid) } //mov imm_ptr_mid, %rcx
-	, { { 0x48, 0xB8 }, st_placeholder(imm_ptr_dispatch) } //mov imm_ptr_dispatch, %rax
-	, { 0xFF, 0xE0 } //jmp   rax
-};
-
-extern void stubthunk_interpret_stdcall_x64(void) asm("stubthunk_interpret_stdcall_x64");
-#define stubthunk stubthunk_x64
-#define stubthunk_templet stubthunk_x64_templet
-#define stubthunk_MID_SLOT rcx
-#define STUBTHUNK_SIZE 24
-
-#define stubthunk_init stubthunk_x64_init
-
-inline void stubthunk_x64_init(stubthunk_x64 *stub, mid_t mid) {
-	memcpy(stub, &stubthunk_templet, sizeof(stubthunk));
-	stub->ph_mid = mid;
-	stub->ph_dispatch = stubthunk_interpret_stdcall_x64;
-}
-
+#if defined(__i386__) || defined(_M_IX86)
+# define SUPPORT_X86
+# define stubthunk stubthunk_x86
+# define stubthunk_init stubthunk_x86_init
+#elif defined(__x86_64__) || defined(_M_X64) || defined(_M_AMD64)
+# define SUPPORT_X64
+# define stubthunk stubthunk_x64
+# define stubthunk_init stubthunk_x64_init
 #else
 # error Unsupported architecture
 #endif
 
-#if defined(_MSC_VER)
-#pragma pack() /*restore the default packing alignment(maybe 4 bytes)*/
-#endif
+#ifdef SUPPORT_X86
+
+// IA-32
+typedef struct GNU_ATTR(__packed__) _stubthunk_x86 {
+	struct GNU_ATTR(__packed__) {
+		uint8_t mov_eax_imm32;  // B8
+		// placeholder: a local hard-code pointer variable but this whole code is dynamically created.
+		uint32_t ph_mid;// placeholder
+	};
+
+	struct GNU_ATTR(__packed__) {
+		// placeholder: relative displacement to eip based on the end address of this structure.
+		uint8_t jmp_rel32;// E9
+		uint32_t ph_ip_to_dispatch;// placeholder
+	};
+}stubthunk_x86;
 
 // I worry a bit the complier do unexpectedly
-union verify_stubthunk_size_manually {
-	char stubthunk_size[STUBTHUNK_SIZE == sizeof(stubthunk) ? 1 : -STUBTHUNK_SIZE];
+union verify_stubthunk_x86_size_manually {
+	char stubthunk_size[10 == sizeof(stubthunk_x86) ? 1 : -1];
 };
 
+void stubthunk_x86_init(stubthunk_x86 *stub, mid_t mid);
+
+#endif
+
+#ifdef SUPPORT_X64
+
+// AMD64, as to some instructions, it will prefix 48 against on x86
+typedef struct GNU_ATTR(__packed__) _stubthunk_x64 {
+	struct GNU_ATTR(__packed__) {
+		uint8_t mov_rcx_imm64[2];  // 48 B9
+		uint64_t ph_mid; // placeholder
+	};
+	struct GNU_ATTR(__packed__) {
+		uint8_t mov_rax_imm64[2];  // 48 B8
+		uint64_t ph_dispatch; // placeholder
+	};
+	uint8_t jmp_rax[2]; // FF E0
+	uint8_t pad[2]; //09 00
+}stubthunk_x64;
+
+// I worry a bit the complier do unexpectedly
+union verify_stubthunk_x64_size_manually {
+	char stubthunk_size[24 == sizeof(stubthunk_x64) ? 1 : -1];
+};
+
+void stubthunk_x64_init(stubthunk_x64 *stub, mid_t mid);
+
+#endif
+
+
+#if defined(_MSC_VER) || defined(__MINGW32__)
+#pragma pack() /*restore the default packing alignment(maybe 4 bytes)*/
+#endif
 
 void *alloc_code(size_t size);
 
 #ifdef __cplusplus
 }
 #endif
+
 #endif
