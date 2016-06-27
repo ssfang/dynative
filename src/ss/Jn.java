@@ -170,7 +170,7 @@ public class Jn {
 
 	public enum NativeType {
 		/** long double */
-		LDOUBLE(0),
+		LDOUBLE(12),
 		/** -6, double 64bits */
 		DOUBLE(8), // -6, double 64bits
 		/** -5, float 32bits */
@@ -180,9 +180,9 @@ public class Jn {
 		VOID(1),
 
 		/** 1, Composite type: an array */
-		ARRAY(0), // 1, Composite type
+		ARRAY(8), // 1, Composite type
 		/** 2, Composite type: a structure */
-		STRUCT(0),
+		STRUCT(8),
 
 		/** 3(8=2^3), char, int8_t, uint8_t */
 		INT8(1),
@@ -199,7 +199,13 @@ public class Jn {
 		 * parameter.
 		 */
 		public static final NativeType DEFAULT = null;
+		static final NativeType INTPTR;
 		private static final int VOID_ORDINAL = 3;
+
+		static {
+			boolean is64bits = System.getProperty("sun.arch.data.model").endsWith("64");
+			INTPTR = is64bits ? INT64 : INT32;
+		}
 
 		private final short size;
 		private final short alignment;
@@ -223,18 +229,18 @@ public class Jn {
 	}
 
 	public enum MappedType {
-		ARRAY(Object[].class, "[", NativeType.ARRAY), //
-		OBJECT(Object.class, "L", NativeType.DEFAULT), //
+		ARRAY(Object[].class, "[", NativeType.ARRAY), // jarray -> (jobject) -> void*
+		OBJECT(Object.class, "L", NativeType.INTPTR), // jobject -> void*
 
-		PVOID(void.class, "V", NativeType.VOID), //
-		PSHORT(short.class, "S", NativeType.INT8), //
-		PBOOLEAN(boolean.class, "Z", NativeType.INT8), //
-		PBYTE(byte.class, "B", NativeType.INT8), //
-		PCHAR(char.class, "C", NativeType.INT16), //
-		PDOUBLE(double.class, "D", NativeType.DOUBLE), //
-		PFLOAT(float.class, "F", NativeType.FLOAT), //
-		PINT(int.class, "I", NativeType.INT32), //
-		PLONG(long.class, "J", NativeType.INT64);
+		PVOID(void.class, "V", NativeType.VOID), // void
+		PSHORT(short.class, "S", NativeType.INT8), // jshort
+		PBOOLEAN(boolean.class, "Z", NativeType.INT8), // jboolean
+		PBYTE(byte.class, "B", NativeType.INT8), // jbyte
+		PCHAR(char.class, "C", NativeType.INT16), // jchar
+		PDOUBLE(double.class, "D", NativeType.DOUBLE), // jdouble
+		PFLOAT(float.class, "F", NativeType.FLOAT), // jfloat
+		PINT(int.class, "I", NativeType.INT32), // jint
+		PLONG(long.class, "J", NativeType.INT64); // jlong
 
 		private MappedType(Class<?> c, String jsign, NativeType ntype) {
 			clazz = c;
@@ -286,6 +292,11 @@ public class Jn {
 
 		public NativeType getType() {
 			return ntype;
+		}
+
+		/** @return sizeof(jobject), sizeof(jint), ... */
+		public int getNativeSize() {
+			return ntype.size();
 		}
 
 		final String sig;
