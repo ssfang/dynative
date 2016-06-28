@@ -6,10 +6,17 @@ public class DynativeMain {
 
 	public static void main(String[] args) throws Exception {
 		Methods ms = new Methods(Jn.class);
+		
 		Method m = ms.getMethod("FromReflectedField");
 		Jn.registerNativeMethodStub(m);
+		
+		m = ms.getMethod("ReleaseStringUTFChars");
+		Jn.registerNativeMethodStub(ms.getMethod("ReleaseStringUTFChars"));
+		
 		long mid = Jn.FromReflectedField(Methods.class.getDeclaredField("methods"));
-		System.out.println(mid);
+		Jn.ReleaseStringUTFChars(null, 0L);
+		
+		System.out.println("mid = " + mid);
 	}
 
 	static {

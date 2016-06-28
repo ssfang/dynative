@@ -71,6 +71,16 @@
 #endif
 #endif
 
+typedef jboolean JBoolean;
+typedef jbyte JByte;
+typedef jchar JChar;
+typedef jshort JShort;
+typedef jint JInt;
+typedef jlong JLong;
+typedef jfloat JFloat;
+typedef jdouble JDouble;
+
+
 #ifdef __cplusplus
 /**
  Version Information

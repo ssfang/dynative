@@ -164,143 +164,20 @@ public class Jn {
 	public native static int registerNativeMethodStub(Method method, Class<?> methodClass, String methodName,
 			String methodSignature, int argsize);
 
+	/**
+	 * 
+	 * @param method
+	 * @return arguments size to balance the stack.
+	 */
+	static int resolveNativeMethod(Method method) {
+		int size = 0;
+		for (Class<?> type : method.getParameterTypes()) {
+			size += MappedType.of(type).getType().size();
+		}
+		return size;
+	}
+
 	static {
 
-	}
-
-	public enum NativeType {
-		/** long double */
-		LDOUBLE(12),
-		/** -6, double 64bits */
-		DOUBLE(8), // -6, double 64bits
-		/** -5, float 32bits */
-		FLOAT(4),
-
-		/** Only apply to the return value */
-		VOID(1),
-
-		/** 1, Composite type: an array */
-		ARRAY(8), // 1, Composite type
-		/** 2, Composite type: a structure */
-		STRUCT(8),
-
-		/** 3(8=2^3), char, int8_t, uint8_t */
-		INT8(1),
-		/** 4(2bytes = 16bits = 2^4bits) */
-		INT16(2),
-		/**
-		 * 5(64=2^5), int, long, char*, T* on 32bits machine, int32_t, uint32_t;
-		 */
-		INT32(4),
-		/** 6(64=2^6), char*, type* on 64bits machine, int64_t, uint64_t; */
-		INT64(8);
-		/**
-		 * only for the annotation, deduce the default type id from the type declaration of a field or a
-		 * parameter.
-		 */
-		public static final NativeType DEFAULT = null;
-		static final NativeType INTPTR;
-		private static final int VOID_ORDINAL = 3;
-
-		static {
-			boolean is64bits = System.getProperty("sun.arch.data.model").endsWith("64");
-			INTPTR = is64bits ? INT64 : INT32;
-		}
-
-		private final short size;
-		private final short alignment;
-
-		private NativeType(int size) {
-			this.size = (short) size;
-			this.alignment = (short) size;
-		}
-
-		public int size() {
-			return size;
-		}
-
-		public int typeid() {
-			return ordinal() - VOID_ORDINAL;
-		}
-
-		public short alignment() {
-			return alignment;
-		}
-	}
-
-	public enum MappedType {
-		ARRAY(Object[].class, "[", NativeType.ARRAY), // jarray -> (jobject) -> void*
-		OBJECT(Object.class, "L", NativeType.INTPTR), // jobject -> void*
-
-		PVOID(void.class, "V", NativeType.VOID), // void
-		PSHORT(short.class, "S", NativeType.INT8), // jshort
-		PBOOLEAN(boolean.class, "Z", NativeType.INT8), // jboolean
-		PBYTE(byte.class, "B", NativeType.INT8), // jbyte
-		PCHAR(char.class, "C", NativeType.INT16), // jchar
-		PDOUBLE(double.class, "D", NativeType.DOUBLE), // jdouble
-		PFLOAT(float.class, "F", NativeType.FLOAT), // jfloat
-		PINT(int.class, "I", NativeType.INT32), // jint
-		PLONG(long.class, "J", NativeType.INT64); // jlong
-
-		private MappedType(Class<?> c, String jsign, NativeType ntype) {
-			clazz = c;
-			this.sig = jsign;
-			this.ntype = ntype;
-		}
-
-		public static MappedType pof(Class<?> t) {
-			if (int.class == t) {
-				return MappedType.PINT;
-			} else if (long.class == t) {
-				return MappedType.PLONG;
-			} else if (float.class == t) {
-				return MappedType.PFLOAT;
-			} else if (double.class == t) {
-				return MappedType.PDOUBLE;
-			} else if (char.class == t) {
-				return MappedType.PCHAR;
-			} else if (short.class == t) {
-				return MappedType.PSHORT;
-			} else if (byte.class == t) {
-				return MappedType.PBYTE;
-			} else if (boolean.class == t) {
-				return MappedType.PBOOLEAN;
-			} else if (void.class == t) {
-				return MappedType.PVOID;
-			} else {
-				throw new IllegalArgumentException("Should never reach here");
-			}
-		}
-
-		public static MappedType of(Class<?> t) {
-			if (t.isPrimitive()) {
-				return pof(t);
-			} else if (t.isArray()) {
-				return MappedType.ARRAY;
-			} else {
-				return MappedType.OBJECT;
-			}
-		}
-
-		public Class<?> getClazz() {
-			return clazz;
-		}
-
-		public String getSig() {
-			return sig;
-		}
-
-		public NativeType getType() {
-			return ntype;
-		}
-
-		/** @return sizeof(jobject), sizeof(jint), ... */
-		public int getNativeSize() {
-			return ntype.size();
-		}
-
-		final String sig;
-		final NativeType ntype;
-		final Class<?> clazz;
 	}
 }

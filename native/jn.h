@@ -34,6 +34,26 @@
 #define LIKELY(x)    __builtin_expect(!!(x),1)
 #define UNLIKELY(x)  __builtin_expect((x)!=0,0)
 
+#define NOOP (void)0
+#define GET_MACRO2(_1, _2, NAME,...) NAME
+
+#ifdef NDEBUG
+# define assert(...) NOOP
+#define D_PRINT NOOP
+#else
+# include <assert.h>
+// #define assert(condition) /*implementation defined*/
+//void asserts(int expr){ assert(expr); }
+//void asserts(int expr, const char* msg){ assert(expr); }
+# define ASSERT2(expr, msg) assert(expr)
+# define ASSERT1(expr) assert(expr)
+# define asserts(...) GET_MACRO2(__VA_ARGS__, ASSERT2, ASSERT1)(__VA_ARGS__)
+# define D_PRINT printf
+#endif
+#define ASSERT_UNSUPPORTED() asserts(0, "unimplemented")
+#define ASSERT_UNIMPL() asserts(0, "unimplemented")
+#define ASSERT_SHOULD_NEVER_REACH() asserts(0, "should never reach here")
+
 //https://en.wikipedia.org/wiki/Data_structure_alignment#Computing_padding
 //Compute an `align`-bytes aligned address for `addr`
 #define ALIGN_DOWN(addr, align) ((((intptr_t) (addr))) & ~((align) - 1))
@@ -67,6 +87,12 @@
 /* Useful for eliminating compiler warnings, forcedly reinterpret cast */
 #define FUNC2PTR(f) ((void*)f)
 
+//[attribute packed broken on mingw32?](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=52991)
+#if defined(_MSC_VER) || defined(__MINGW32__)
+#define HAVE_PRAGMA_PACK
+#endif
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -78,14 +104,22 @@ extern "C" {
 JNIEXPORT jint JNICALL Java_ss_Jn_registerNativeMethodStub(JNIEnv *, jclass, jobject, jclass, jstring,
 		jstring, jint argsize);
 
-
-
 typedef int *mid_t;
 
-//[attribute packed broken on mingw32?](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=52991)
-#if defined(_MSC_VER) || defined(__MINGW32__)
+#ifdef HAVE_PRAGMA_PACK
 #pragma pack(1) /* Specify packing alignment for structure members as 1 byte boundary*/
 #endif
+
+typedef struct CStMeta {
+	size_t size;
+	jclass cls;
+	jmethodID ctor;
+	jint len;
+
+	//"IF...L<pfid><pfid>...<pfid><pfid>[<pStMeta><cndims><ccomponent><ilength><pclsmeta>"
+	//members="I<pfid>F<pfid>L<pfid><pStMeta>[<pfid><cndims><ccomponent><ilength><pclsmeta>"
+	char mem[];
+} StMeta;
 
 // https://sourceforge.net/p/predef/wiki/Architectures/
 //#ifdef __LP64__ || _LP64
@@ -125,23 +159,23 @@ union verify_stubthunk_x86_size_manually {
 
 void stubthunk_x86_init(stubthunk_x86 *stub, mid_t mid);
 
-#endif
+#endif // end SUPPORT_X86
 
 #ifdef SUPPORT_X64
 
 // AMD64, as to some instructions, it will prefix 48 against on x86
 typedef struct GNU_ATTR(__packed__) _stubthunk_x64 {
-	struct GNU_ATTR(__packed__) {
+struct GNU_ATTR(__packed__) {
 		uint8_t mov_rcx_imm64[2];  // 48 B9
 		uint64_t ph_mid; // placeholder
 	};
-	struct GNU_ATTR(__packed__) {
+struct GNU_ATTR(__packed__) {
 		uint8_t mov_rax_imm64[2];  // 48 B8
 		uint64_t ph_dispatch; // placeholder
 	};
 	uint8_t jmp_rax[2]; // FF E0
 	uint8_t pad[2]; //09 00
-}stubthunk_x64;
+} stubthunk_x64;
 
 // I worry a bit the complier do unexpectedly
 union verify_stubthunk_x64_size_manually {
@@ -150,10 +184,9 @@ union verify_stubthunk_x64_size_manually {
 
 void stubthunk_x64_init(stubthunk_x64 *stub, mid_t mid);
 
-#endif
+#endif // end SUPPORT_X64
 
-
-#if defined(_MSC_VER) || defined(__MINGW32__)
+#ifdef HAVE_PRAGMA_PACK
 #pragma pack() /*restore the default packing alignment(maybe 4 bytes)*/
 #endif
 
@@ -162,5 +195,40 @@ void *alloc_code(size_t size);
 #ifdef __cplusplus
 }
 #endif
+
+
+// time-efficient https://gcc.gnu.org/onlinedocs/gcc/Common-Type-Attributes.html#Common-Type-Attributes
+struct primitivetype {
+	char sig;
+	unsigned char nt;
+	unsigned short size;
+};
+
+struct plaintype {
+	char sig;
+	unsigned char nt;
+	unsigned short size;
+
+	StMeta *hmeta;
+};
+
+struct objecttype {
+	char sig;
+	unsigned char nt;
+	short pad;
+
+	int size;
+	StMeta *hmeta;
+};
+
+struct arraytype {
+	char sig;
+	unsigned char nt;
+	unsigned char ndims;
+	unsigned char elementsig;
+
+	int size;
+	StMeta *hmeta;
+};
 
 #endif
