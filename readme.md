@@ -124,8 +124,8 @@ So, windbg is a good choice on windows.
 
 ### JNI
 
-* [Resolving Native Method Names](http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/design.html#wp615) mentions 
-> Both the native methods and the interface APIs follow the standard library-calling convention on a given platform. For example, UNIX systems use the C calling convention, while Win32 systems use __stdcall.
+[Resolving Native Method Names](http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/design.html#wp615) mentions  
+> Both the native methods and the interface APIs follow the standard library-calling convention on a given platform. For example, UNIX systems use the `C` calling convention, while Win32 systems use `__stdcall`.  
 
 ### On unix
 
