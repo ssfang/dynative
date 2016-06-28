@@ -1,5 +1,7 @@
 
 
+# My note
+
 ## development
 
 ### Files
@@ -116,7 +118,63 @@ Report process status
 
 With no options, ps outputs the long format by default
 ```
+So, windbg is a good choice on windows.
+
+## Document
+
+### JNI
+
+* [Resolving Native Method Names](http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/design.html#wp615) mentions 
+> Both the native methods and the interface APIs follow the standard library-calling convention on a given platform. For example, UNIX systems use the C calling convention, while Win32 systems use __stdcall.
+
+### On unix
 
 
+### On windows
+
+* [__stdcall](https://msdn.microsoft.com/en-us/library/zxk0tw93.aspx)
+> **Argument-passing**: order Right to left.  
+> **Argument-passing convention**: By value, unless a pointer or reference type is passed.  
+> **Stack-maintenance responsibility**: Called function pops its own arguments from the stack.  
+> **Name-decoration convention**: An underscore (_) is prefixed to the name. The name is followed by the at sign (@) followed by the number of bytes (in decimal) in the argument list. Therefore, the function declared as `int func( int a, double b )` is decorated as follows: `_func@12`  
+> **Case-translation convention**: None  
+
+* [__cdecl](https://msdn.microsoft.com/en-us/library/zkwh89ks.aspx)
+> Argument-passing order: Right to left. The stack is cleaned up by the caller, it can do vararg functions.   
+> On ARM and x64 processors, `__cdecl` is accepted but typically ignored by the compiler. By convention on ARM and x64, arguments are passed in registers when possible, and subsequent arguments are passed on the stack. In x64 code, use `__cdecl` to override the `/Gv` compiler option and use the default x64 calling convention.
+
+* [Floating Point Coprocessor and Calling Conventions](https://msdn.microsoft.com/en-us/library/ha59cbfz.aspx)
+> If you are writing assembly routines for the floating point coprocessor, you must preserve the floating point control word and clean the coprocessor stack unless you are returning a float or double value (which your function should return in ST(0)).
+
+#### x64
+
+* [x64 Software Conventions](https://msdn.microsoft.com/en-us/library/7kcdt6fy.aspx), [Parameter Passing](https://msdn.microsoft.com/en-us/library/zthk2dkh.aspx)
+> **Floating point**: First 4 parameters – XMM0 through XMM3. Others passed on stack.  
+> **Integer**: First 4 parameters – RCX, RDX, R8, R9. Others passed on stack.  
+> **Aggregates (8, 16, 32, or 64 bits) and `__m64`**: First 4 parameters – RCX, RDX, R8, R9. Others passed on stack.   
+> **Aggregates (other)**: By pointer. First 4 parameters passed as pointers in RCX, RDX, R8, and R9  
+> **`__m128`**: By pointer. First 4 parameters passed as pointers in RCX, RDX, R8, and R9  
+
+* [Floating-Point Support for Older Code (Visual C++)](https://msdn.microsoft.com/en-us/library/a32tsf7t.aspx)
+> The MMX and floating-point stack registers (MM0-MM7/ST0-ST7) are preserved across context switches. There is no explicit calling convention for these registers. The use of these registers is strictly prohibited in kernel mode code.
+
+* [Return Values (C++)](https://msdn.microsoft.com/en-us/library/7572ztz4.aspx). Basically: 
+> A scalar return value that can fit into 64 bits is returned through `RAX`—this includes `__m64` types.   
+> Non-scalar types including floats, doubles, and vector types such as `__m128`, `__m128i`, `__m128d` are returned in XMM0.   
+> The state of unused bits in the value returned in RAX or XMM0 is undefined.  
+
+
+#### [Naked Function Calls](https://msdn.microsoft.com/en-us/library/5ekezyy2.aspx)
+* [Rules and Limitations for Naked Functions](https://msdn.microsoft.com/en-us/library/4d12973a.aspx)
+* [naked (C++)](https://msdn.microsoft.com/en-us/library/h5w10wxs.aspx) mentions : 
+> Note that the naked attribute is only valid on x86 and ARM, and is not available on x64.
+* [Considerations for Writing Prolog/Epilog Code](https://msdn.microsoft.com/en-us/library/6xy06s51.aspx)
+
+
+### Other documents
+
+* gnu [6.31 Declaring Attributes of Functions](https://gcc.gnu.org/onlinedocs/gcc/Function-Attributes.html)
+* [x86 Disassembly/Calling Conventions](https://en.wikibooks.org/wiki/X86_Disassembly/Calling_Conventions)
+* [x86 calling conventions](https://en.wikipedia.org/wiki/X86_calling_conventions)
 
 [jps]: http://docs.oracle.com/javase/7/docs/technotes/tools/share/jps.html "jps - Java Virtual Machine Process Status Tool"
