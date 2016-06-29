@@ -14,6 +14,8 @@ stubthunk_interpret_stdcall_x86:
 
 	/* expect like [invoke PROC proto](https://support.microsoft.com/en-us/kb/73407) */
  	push   %eax			/* size_t argsize */
+ 	push   0xc(%ebp)	/* jclass cls or jobject obj */
+ 	push   0x8(%ebp)	/* JNIEnv *env */
 	call   dispatch
 
  	leave	/* restore the local scoped stack frame considering `call dispatch`*/

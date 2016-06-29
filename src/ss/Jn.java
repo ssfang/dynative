@@ -135,7 +135,7 @@ public class Jn {
 			for (Class<?> type : method.getParameterTypes()) {
 				size += MappedType.of(type).getType().size();
 			}
-			registerNativeMethodStub(method, method.getDeclaringClass(), method.getName(), getSignature(method), size);
+			registerNativeMethodStub(method, method.getDeclaringClass(), method.getName(), getSignature(method));
 		}
 	}
 
@@ -162,22 +162,35 @@ public class Jn {
 	 *             if a specified method cannot be found or if the method is not native.
 	 */
 	public native static int registerNativeMethodStub(Method method, Class<?> methodClass, String methodName,
-			String methodSignature, int argsize);
+			String methodSignature);
 
 	/**
+	 * )
 	 * 
 	 * @param method
+	 * @param receiver
+	 *            if the method is a static method, it just denotes a class, otherwise, the method is an
+	 *            instance method and it represents an instance or is called "this" pointer.
 	 * @return arguments size to balance the stack.
 	 */
-	static int resolveNativeMethod(Method method) {
+	static int resolveNativeMethod(Method method, Object methodClass) {
+
 		int size = 0;
 		for (Class<?> type : method.getParameterTypes()) {
 			size += MappedType.of(type).getType().size();
 		}
+		//System.out.println("========resolveNativeMethod=========");
 		return size;
 	}
 
-	static {
+	private static native void init(Method methods);
 
+	static {
+		try {
+			init(Jn.class.getDeclaredMethod("resolveNativeMethod", Method.class, Object.class));
+		} catch (NoSuchMethodException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 }

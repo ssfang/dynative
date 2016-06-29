@@ -1,4 +1,5 @@
 #include "jn.h"
+#include "jni.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +33,10 @@
 #include <windows.h>
 # endif
 
-void dispatch(size_t argsize) ASM("dispatch");
+jclass C_ss_Jn;
+jmethodID M_ss_Jn_resolveNativeMethod;
+
+int dispatch(JNIEnv *env, jclass receiver, jmethodID mid) ASM("dispatch");
 
 #define st_placeholder(x) 0
 
@@ -47,8 +51,8 @@ static const stubthunk_x86 stubthunk_x86_templet = {
 	, {	0xE9, st_placeholder(rel32_offset)} // jmp rel32_offset
 };
 
-void stubthunk_x86_init(stubthunk_x86 *stub, mid_t mid) {
-	memcpy(stub, &stubthunk_x86_templet, sizeof(stubthunk));
+void stubthunk_x86_init(stubthunk_x86 *stub, jmethodID mid) {
+	memcpy(stub, &stubthunk_x86_templet, sizeof(stubthunk_x86));
 	stub->ph_mid = (uint32_t)mid;
 	stub->ph_ip_to_dispatch = (uint32_t) ((uintptr_t) stubthunk_interpret_stdcall_x86 - ((uintptr_t) stub + sizeof(stubthunk)));
 }
@@ -61,22 +65,29 @@ void stubthunk_x86_init(stubthunk_x86 *stub, mid_t mid) {
 extern void stubthunk_interpret_stdcall_x64(void) ASM("stubthunk_interpret_stdcall_x64");
 
 static const stubthunk_x64 stubthunk_x64_templet = {
-	{ { 0x48, 0xB9 }, st_placeholder(imm_ptr_mid) } //mov imm_ptr_mid, %rcx
-	, { { 0x48, 0xB8 }, st_placeholder(imm_ptr_dispatch) } //mov imm_ptr_dispatch, %rax
-	, { 0xFF, 0xE0 } //jmp   rax
+		{ { 0x49, 0xBC }, st_placeholder(imm_ptr_mid) } //mov imm_ptr_mid, %rcx
+		, { { 0x48, 0xB8 }, st_placeholder(imm_ptr_dispatch) } //mov imm_ptr_dispatch, %rax
+		, { 0xFF, 0xE0 } //jmp   rax
 };
 
-void stubthunk_x64_init(stubthunk_x64 *stub, mid_t mid) {
-	memcpy(stub, &stubthunk_x64_templet, sizeof(stubthunk));
-	stub->ph_mid = (uint64_t)mid;
-	stub->ph_dispatch = (uint64_t)FUNC2PTR(stubthunk_interpret_stdcall_x64);
+void stubthunk_x64_init(stubthunk_x64 *stub, jmethodID mid) {
+	memcpy(stub, &stubthunk_x64_templet, sizeof(stubthunk_x64));
+	stub->ph_mid = (uint64_t) mid;
+	stub->ph_dispatch = (uint64_t) FUNC2PTR(stubthunk_interpret_stdcall_x64);
+	nativetrace(_T("stubthunk_x64_init(stub@%p, mid@%p), ph_dispatch=%p\n"), stub, mid, stubthunk_interpret_stdcall_x64);
 }
 
 #endif
 
-void dispatch(size_t argsize) {
-	//int argsize;
-	_tprintf(_T("------dispatch, %d\n"), (int) argsize);
+int dispatch(JNIEnv *env, jclass receiver, jmethodID mid) {
+	nativetrace(_T("dispatch(env@%p, receiver@%p,  mid@%p)\n"), env, receiver, mid);
+	jclass jcls = jniGetObjectClass(env, receiver);
+	jclass jcls2 = jniGetObjectClass(env, jcls);
+	jboolean isStaticMethod = jniIsSameObject(env, jcls, jcls2);
+	jobject jmethod = jniToReflectedMethod(env, isStaticMethod ? receiver : jcls, mid, isStaticMethod);
+	jniCallStaticIntMethod(env, C_ss_Jn, M_ss_Jn_resolveNativeMethod, jmethod, receiver);
+	nativetrace(_T("------dispatch, %p, isStaticMethod = %d\n"), mid, isStaticMethod);
+	return 0;
 }
 
 void stubthunk_call_test(void *stub) {
@@ -90,10 +101,10 @@ void stubthunk_call_test(void *stub) {
 	}
 #else
 	__asm__ __volatile(
-		"call *%0\n\t" /* the complier will gen like "movl	-16(%ebp), %eax; call %eax", indirect call with `*'*/
-		: /* No output registers. */
-		:"r" (stub)
-		: /* clobbered register.  */
+			"call *%0\n\t" /* the complier will gen like "movl	-16(%ebp), %eax; call %eax", indirect call with `*'*/
+			: /* No output registers. */
+			:"r" (stub)
+			: /* clobbered register.  */
 	);
 #endif
 }
@@ -127,15 +138,15 @@ int set_executable(void* addr, size_t size) {
 		// __in_bcount_opt(dwSize) LPCVOID lpBaseAddress,
 		// __in SIZE_T dwSize
 		//);
-		if(FlushInstructionCache(GetCurrentProcess(), addr, size))
-		return 0;
+		if (FlushInstructionCache(GetCurrentProcess(), addr, size))
+			return 0;
 	}
 	TCHAR szMessageBuffer[128];
 	DWORD_PTR dwError = GetLastError();
 	FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, "GetLastError = %1!x!, %0", dwError,
 			MAKELANGID(LANG_NEUTRAL, SUBLANG_SYS_DEFAULT), szMessageBuffer, 128, (char**) &dwError);
 	//MessageBox(NULL, szMessageBuffer, _T("Error"), MB_OK);
-	_tprintf(_T("GetLastError = %u, %s\n"), dwError, szMessageBuffer);
+	_tprintf(_T("GetLastError = %d, %s\n"), (int)dwError, szMessageBuffer);
 	return -1;
 #else
 	const int pagesize = sysconf(_SC_PAGE_SIZE);
@@ -147,14 +158,14 @@ int set_executable(void* addr, size_t size) {
 	intptr_t start, end;
 	start = REINTERPRET_CAST(intptr_t, addr) & ~(pagesize - 1); //align down to a page boundary
 	end = REINTERPRET_CAST(intptr_t, addr) + size;
-	end = (end + pagesize - 1) & ~(pagesize - 1); // align up to a page boundary
+	end = (end + pagesize - 1) & ~(pagesize - 1);// align up to a page boundary
 	/*
 	 * mprotect() changes protection for the calling process's memory page(s) containing any part of
 	 * the address range in the interval [addr, addr+len-1].  addr must be aligned to a page boundary.
 	 * [mprotect](http://man7.org/linux/man-pages/man2/mprotect.2.html)
 	 */
 	if (0 == mprotect(REINTERPRET_CAST(void *, start), end - start,
-	PROT_READ | PROT_WRITE | PROT_EXEC)) {
+					PROT_READ | PROT_WRITE | PROT_EXEC)) {
 
 	} else {
 		_tprintf(_T("errno(%d):%s\n"), errno, strerror(errno));

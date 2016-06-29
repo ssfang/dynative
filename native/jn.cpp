@@ -1,15 +1,22 @@
 #include "jn.h"
 #include "jni.h"
 
+extern "C" {
+jclass C_ss_Jn;
+jmethodID M_ss_Jn_resolveNativeMethod;
+}
+
 //http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/functions.html#registering_native_methods
 JNIEXPORT jint JNICALL Java_ss_Jn_registerNativeMethodStub(JNIEnv *env, jclass cls, jobject method,
-		jclass clazz, jstring name, jstring signature, jint argsize) {
+		jclass clazz, jstring name, jstring signature) {
 
 	const char* utfName = jniGetStringUTFChars(env, name, 0);
 	const char* utfSignature = jniGetStringUTFChars(env, signature, 0);
 	// TODO release stubthunk *stub
 	stubthunk *stub = (stubthunk*) alloc_code(sizeof(stubthunk));
-	stubthunk_init(stub, (mid_t) (intptr_t) argsize);
+	jmethodID mid = jniFromReflectedMethod(env, method);
+	nativetrace("Java_ss_Jn_registerNativeMethodStub for jmethodID = %p\n", mid);
+	stubthunk_init(stub, mid);
 
 	JNINativeMethod methods = { CONST_CAST(char*, utfName), CONST_CAST(char*, utfSignature), stub };
 
@@ -19,6 +26,17 @@ JNIEXPORT jint JNICALL Java_ss_Jn_registerNativeMethodStub(JNIEnv *env, jclass c
 	jniReleaseStringUTFChars(env, signature, utfSignature);
 	return retval;
 }
+
+JNIEXPORT void JNICALL Java_ss_Jn_init(JNIEnv *env, jclass cls, jobject method) {
+	M_ss_Jn_resolveNativeMethod = jniFromReflectedMethod(env, method);
+	C_ss_Jn = REINTERPRET_CAST(jclass, jniNewGlobalRef(env, cls));
+}
+
+//JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *jvm, void *reserved) {
+//	UNUSED(reserved);
+//
+//	return JNI_VERSION_1_4;
+//}
 
 class CRaw {
 private:
@@ -65,14 +83,30 @@ public:
 			// D_PRINT("Field[%d]: sig = %c\n", idx, jsig);
 			switch (jsig) {
 #define SET_FIELD_VALUE(NAME) jniSet##NAME##Field(env, jobj, pMemberFieldId[idx], read<J##NAME>())
-			case 'Z': SET_FIELD_VALUE(Boolean); break;
-			case 'B': SET_FIELD_VALUE(Byte); break;
-			case 'C': SET_FIELD_VALUE(Char); break;
-			case 'S': SET_FIELD_VALUE(Short); break;
-			case 'I': SET_FIELD_VALUE(Int); break;
-			case 'J': SET_FIELD_VALUE(Long); break;
-			case 'F': SET_FIELD_VALUE(Float); break;
-			case 'D': SET_FIELD_VALUE(Double); break;
+			case 'Z':
+				SET_FIELD_VALUE(Boolean);
+				break;
+			case 'B':
+				SET_FIELD_VALUE(Byte);
+				break;
+			case 'C':
+				SET_FIELD_VALUE(Char);
+				break;
+			case 'S':
+				SET_FIELD_VALUE(Short);
+				break;
+			case 'I':
+				SET_FIELD_VALUE(Int);
+				break;
+			case 'J':
+				SET_FIELD_VALUE(Long);
+				break;
+			case 'F':
+				SET_FIELD_VALUE(Float);
+				break;
+			case 'D':
+				SET_FIELD_VALUE(Double);
+				break;
 #undef SET_FIELD_VALUE
 			case 't':
 				//Constructs a new java.lang.String object from an array of characters in modified UTF-8 encoding.
@@ -133,14 +167,30 @@ public:
 		for (int idx = 0; idx < meta->len; idx++) {
 			char jsig = ((primitivetype*) pmeta)->sig;
 			switch (jsig) {
-			case 'Z': write(jniGetBooleanField(env, jobj, pMemberFieldId[idx])); break;
-			case 'B': write(jniGetByteField(env, jobj, pMemberFieldId[idx])); break;
-			case 'C': write(jniGetCharField(env, jobj, pMemberFieldId[idx])); break;
-			case 'S': write(jniGetShortField(env, jobj, pMemberFieldId[idx])); break;
-			case 'I': write(jniGetIntField(env, jobj, pMemberFieldId[idx])); break;
-			case 'J': write(jniGetLongField(env, jobj, pMemberFieldId[idx])); break;
-			case 'F': write(jniGetFloatField(env, jobj, pMemberFieldId[idx])); break;
-			case 'D': write(jniGetDoubleField(env, jobj, pMemberFieldId[idx])); break;
+			case 'Z':
+				write(jniGetBooleanField(env, jobj, pMemberFieldId[idx]));
+				break;
+			case 'B':
+				write(jniGetByteField(env, jobj, pMemberFieldId[idx]));
+				break;
+			case 'C':
+				write(jniGetCharField(env, jobj, pMemberFieldId[idx]));
+				break;
+			case 'S':
+				write(jniGetShortField(env, jobj, pMemberFieldId[idx]));
+				break;
+			case 'I':
+				write(jniGetIntField(env, jobj, pMemberFieldId[idx]));
+				break;
+			case 'J':
+				write(jniGetLongField(env, jobj, pMemberFieldId[idx]));
+				break;
+			case 'F':
+				write(jniGetFloatField(env, jobj, pMemberFieldId[idx]));
+				break;
+			case 'D':
+				write(jniGetDoubleField(env, jobj, pMemberFieldId[idx]));
+				break;
 			case '[': {
 				ASSERT_UNSUPPORTED();
 				joMember = jniGetObjectField(env, jobj, pMemberFieldId[idx]);

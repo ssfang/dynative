@@ -92,6 +92,7 @@
 #define HAVE_PRAGMA_PACK
 #endif
 
+#define nativetrace(...) //printf
 
 #ifdef __cplusplus
 extern "C" {
@@ -102,9 +103,13 @@ extern "C" {
  * Signature: (Ljava/lang/reflect/Method;Ljava/lang/Class;Ljava/lang/String;Ljava/lang/String;)I
  */
 JNIEXPORT jint JNICALL Java_ss_Jn_registerNativeMethodStub(JNIEnv *, jclass, jobject, jclass, jstring,
-		jstring, jint argsize);
-
-typedef int *mid_t;
+		jstring);
+/*
+ * Class:     ss_Jn
+ * Method:    init
+ * Signature: (Ljava/lang/reflect/Method;)I
+ */
+JNIEXPORT void JNICALL Java_ss_Jn_init(JNIEnv *, jclass, jobject);
 
 #ifdef HAVE_PRAGMA_PACK
 #pragma pack(1) /* Specify packing alignment for structure members as 1 byte boundary*/
@@ -157,19 +162,24 @@ union verify_stubthunk_x86_size_manually {
 	char stubthunk_size[10 == sizeof(stubthunk_x86) ? 1 : -1];
 };
 
-void stubthunk_x86_init(stubthunk_x86 *stub, mid_t mid);
+void stubthunk_x86_init(stubthunk_x86 *stub, jmethodID mid);
 
 #endif // end SUPPORT_X86
 
 #ifdef SUPPORT_X64
 
-// AMD64, as to some instructions, it will prefix 48 against on x86
+// AMD64
+// [Register Usage](https://msdn.microsoft.com/en-us/library/9z1stfyw.aspx)
+// RAX Volatile Return value register
+// RCX, RDX, R8, R9 Volatile First 4 integer parameters
+// R10:R11 Volatile Must be preserved as needed by caller; used in syscall/sysret instructions
+// R12:R15 Nonvolatile Must be preserved by callee
 typedef struct GNU_ATTR(__packed__) _stubthunk_x64 {
-struct GNU_ATTR(__packed__) {
-		uint8_t mov_rcx_imm64[2];  // 48 B9
+	struct GNU_ATTR(__packed__) {
+		uint8_t mov_r12_imm64[2];  // 49 BC
 		uint64_t ph_mid; // placeholder
 	};
-struct GNU_ATTR(__packed__) {
+	struct GNU_ATTR(__packed__) {
 		uint8_t mov_rax_imm64[2];  // 48 B8
 		uint64_t ph_dispatch; // placeholder
 	};
@@ -182,7 +192,7 @@ union verify_stubthunk_x64_size_manually {
 	char stubthunk_size[24 == sizeof(stubthunk_x64) ? 1 : -1];
 };
 
-void stubthunk_x64_init(stubthunk_x64 *stub, mid_t mid);
+void stubthunk_x64_init(stubthunk_x64 *stub, jmethodID mid);
 
 #endif // end SUPPORT_X64
 
@@ -195,7 +205,6 @@ void *alloc_code(size_t size);
 #ifdef __cplusplus
 }
 #endif
-
 
 // time-efficient https://gcc.gnu.org/onlinedocs/gcc/Common-Type-Attributes.html#Common-Type-Attributes
 struct primitivetype {
