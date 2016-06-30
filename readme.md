@@ -2,6 +2,8 @@
 
 # My note
 
+[dynative](https://github.com/ssfang/dynative
+
 ## development
 
 ### Files
@@ -118,14 +120,20 @@ Report process status
 
 With no options, ps outputs the long format by default
 ```
-So, windbg is a good choice on windows.
+So, windbg is a good choice on windows, but the current ollydbg2.x only for x86 is also ok, and maybe ida is a generic solution.
 
-## Document
+### Debug information about gnu or mingw complier vs ms vc complier
+
+* [Generate pdb files for debugging on windows using the mingw32 tools](http://mingw.5.n7.nabble.com/Generate-PDB-files-td17383.html)
+> Only the Microsoft tools use the proprietary PDB format. The GNU tools use STABS or DWARF-2 for the debug information.  There is no free software to either read or write PDB, as far as I know.   
+> Besides, it wouldn't be of use anyway since debug information is somewhat tied to the internals of the compiler and it's likely that the Microsoft debugger would not be able to make sense of gcc's debug data even if gcc could write it in PDB format -- at least for C++ where the mangling and ABIs are totally different. 
+* [Interoperability of Libraries Created by Different Compiler Brands](http://www.mingw.org/wiki/MixingCompilers)
+
+## References
 
 ### JNI
 
-* [Resolving Native Method Names](http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/design.html#wp615) mentions 
-
+* [Resolving Native Method Names](http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/design.html#wp615)
  > Both the native methods and the interface APIs follow the standard library-calling convention on a given platform. For example, UNIX systems use the C calling convention, while Win32 systems use __stdcall.
 
 * [Referencing Java Objects](http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/design.html#wp16785)
