@@ -176,7 +176,7 @@ void stubthunk_x86_init(stubthunk_x86 *stub, jmethodID mid);
 // R12:R15 Nonvolatile Must be preserved by callee
 typedef struct GNU_ATTR(__packed__) _stubthunk_x64 {
 	struct GNU_ATTR(__packed__) {
-		uint8_t mov_r12_imm64[2];  // 49 BC
+		uint8_t mov_r10_imm64[2];  // 49 BA
 		uint64_t ph_mid; // placeholder
 	};
 	struct GNU_ATTR(__packed__) {

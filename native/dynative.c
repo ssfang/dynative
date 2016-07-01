@@ -65,8 +65,8 @@ void stubthunk_x86_init(stubthunk_x86 *stub, jmethodID mid) {
 extern void stubthunk_interpret_stdcall_x64(void) ASM("stubthunk_interpret_stdcall_x64");
 
 static const stubthunk_x64 stubthunk_x64_templet = {
-		{ { 0x49, 0xBC }, st_placeholder(imm_ptr_mid) } //mov imm_ptr_mid, %rcx
-		, { { 0x48, 0xB8 }, st_placeholder(imm_ptr_dispatch) } //mov imm_ptr_dispatch, %rax
+		{ { 0x49, 0xBA }, st_placeholder(imm_ptr_mid) } //mov imm64_mid, %r10
+		, { { 0x48, 0xB8 }, st_placeholder(imm_ptr_dispatch) } //mov imm64_dispatch, %rax
 		, { 0xFF, 0xE0 } //jmp   rax
 };
 
@@ -85,9 +85,10 @@ int dispatch(JNIEnv *env, jclass receiver, jmethodID mid) {
 	jclass jcls2 = jniGetObjectClass(env, jcls);
 	jboolean isStaticMethod = jniIsSameObject(env, jcls, jcls2);
 	jobject jmethod = jniToReflectedMethod(env, isStaticMethod ? receiver : jcls, mid, isStaticMethod);
-	jniCallStaticIntMethod(env, C_ss_Jn, M_ss_Jn_resolveNativeMethod, jmethod, receiver);
-	nativetrace(_T("------dispatch, %p, isStaticMethod = %d\n"), mid, isStaticMethod);
-	return 0;
+	jint byteSize = jniCallStaticIntMethod(env, C_ss_Jn, M_ss_Jn_resolveNativeMethod, jmethod, receiver);
+	nativetrace(_T("------dispatch, %p, isStaticMethod = %d, need %d bytes to restore the stack\n"),
+			mid, isStaticMethod, byteSize);
+	return byteSize;
 }
 
 void stubthunk_call_test(void *stub) {

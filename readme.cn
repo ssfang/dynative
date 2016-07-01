@@ -1,0 +1,97 @@
+通用寄存器中，易失性有如下区分：
+易失的，在调用其它函数前需要考虑如果以后还需要使用的话，就要在调用函数前保存；
+非易失的，则不必这样考虑，被调用者callee，如果它用到这些寄存器的话会给你保存。
+
+[寄存器使用](https://msdn.microsoft.com/zh-cn/library/9z1stfyw(v=vs.80).aspx)
+
+> x64 结构提供了 16 个通用寄存器（以后称为整数寄存器），以及 16 个可供浮点使用的 XMM 寄存器。易失寄存器是由调用方假想的临时寄存器，并要在调用过程中销毁。非易失寄存器需要在整个函数调用过程中保留其值，并且一旦使用，则必须由被调用方保存。
+> 下表说明了每种寄存器在整个函数调用过程中的使用方法：
+```	
+Register	状态		用途
+RAX			易失的	返回值寄存器
+RCX			易失的	第一个整型参数
+RDX			易失的	第二个整型参数
+R8			易失的	第三个整型参数
+R9			易失的	第四个整型参数
+R10:R11		易失的	必须根据需要由调用方保留；在 syscall/sysret 指令中使用
+R12:R15		非易失的	必须由被调用方保留
+RDI			非易失的	必须由被调用方保留
+RSI			非易失的	必须由被调用方保留
+RBX			非易失的	必须由被调用方保留
+RBP			非易失的	可用作帧指针；必须由被调用方保留
+RSP			非易失的	堆栈指针
+XMM0		易失的	第一个 FP 参数
+XMM1		易失的	第二个 FP 参数
+XMM2		易失的	第三个 FP 参数
+XMM3		易失的	第四个 FP 参数
+XMM4:XMM5	易失的	必须根据需要由调用方保留
+XMM6:XMM15	非易失的	必须根据需要由被调用方保留。
+```
+
+[由调用方或被调用方保存的寄存器](https://msdn.microsoft.com/zh-cn/library/6t169e9c(v=vs.80).aspx)
+
+
+寄存器 RAX、RCX、RDX、R8、R9、R10、R11 被视为易失的，并且必须在函数调用时视为已销毁（除非通过全程序优化等分析被认定为安全的）。
+寄存器 RBX、RBP、RDI、RSI、R12、R13、R14 和 R15 被视为非易失的，必须由使用它们的函数进行保存和还原。
+```
+48 b8 90 78 56 34 12 00 00 00  movabs $0x1234567890,%rax
+48 b9 90 78 56 34 12 00 00 00  movabs $0x1234567890,%rcx
+48 ba 90 78 56 34 12 00 00 00  movabs $0x1234567890,%rdx
+49 b8 90 78 56 34 12 00 00 00  movabs $0x1234567890,%r9
+49 b9 90 78 56 34 12 00 00 00  movabs $0x1234567890,%r9
+49 ba 90 78 56 34 12 00 00 00  movabs $0x1234567890,%r10
+49 bb 90 78 56 34 12 00 00 00  movabs $0x1234567890,%r11
+49 bc 90 78 56 34 12 00 00 00  movabs $0x1234567890,%r12
+49 bd 90 78 56 34 12 00 00 00  movabs $0x1234567890,%r13
+49 be 90 78 56 34 12 00 00 00  movabs $0x1234567890,%r14
+49 bf 90 78 56 34 12 00 00 00  movabs $0x1234567890,%r15
+
+48 c7 c0 78 56 34 12  mov    $0x12345678,%rax
+
+;; jmp *$0x1234567890 ; Error: immediate operand illegal with absolute jump
+ff e0 jmpq   *%rax ; indirect jmp need prefix `*' Or Warning: indirect jmp without `*'
+ff e1 jmpq   *%rcx ; indirect jmp need prefix `*' Or Warning: indirect jmp without `*'
+```
+
+[Can I add 64bit constants in nasm?](http://stackoverflow.com/questions/20020589/can-i-add-64bit-constants-in-nasm)
+There is an opcode for `mov r/m64, imm64`, but there is no opcode for `add r/m64, imm64`
+in the x86-64 instruction set. In other words:  you cannot use 64-bit immediate operand
+for `add`., but you can for `mov` (there are many instructions that don't have the imm64
+variant; you can check the Instruction Set Reference in the Intel Software Developer 
+Manual to check which instructions have such variant and which don't).
+
+```
+48 81 c4 78 56 34 12  add    $0x12345678,%rsp
+48 01 c4              add    %rax,%rsp
+48 01 cc              add    %rcx,%rsp
+4c 01 d4              add    %r10,%rsp
+4c 01 dc              add    %r11,%rsp
+4c 01 e4              add    %r12,%rsp
+4c 01 ec              add    %r13,%rsp
+```
+
+
+我不是非常记得指令的架构，但是还是了解指令的组成opcode，SIB等，为了快速得到问题答案，我先bing立刻得到两篇文章
+
+[JMP instruction - Hex code](http://stackoverflow.com/questions/9815448/jmp-instruction-hex-code)
+
+
+[Trampolines In x64](http://www.ragestorm.net/blogs/?p=107)
+* JMP relative instruction, when you know in advance the difference from the hooked function to the target trampoline is less than 2GB, is a very good method, only 5 bytes.
+* `MOV RAX, imm32; JMP RAX` This one is almost optimal, you can branch everywhere in the address space, it takes only 12 bytes. It suffers a destruction of a register. Of course, by the ABI (Application Binary Interface) which the compiler implements, some registers are defined as volatile, means you can use them almost any time without worrying or needing to restore them. Analyzing the function (using a disassembler) you may be able to know which register you can use safely. That’s a big headache though.
+Note that you could replace the `JMP RAX` with `PUSH RAX;RET`, but it’s still the same size.
+
+
+顺便提到了得到指令的十六进制格式方法，虽然是已知问题，还是记录下来保持全面
+
+[Compiler Explorer - C++](http://gcc.godbolt.org)一个在线的编译器，可以查看汇编包括十六进制，就是复制麻烦。
+
+```
+echo 'asm("mov $400835, %rax\n jmp *%rax\n");' > test.c
+gcc -c test.c
+objdump -d test.o
+```
+
+[Stack frame layout on x86-64](http://eli.thegreenplace.net/2011/09/06/stack-frame-layout-on-x86-64/)
+Another important change that was made in the Windows x64 ABI is the cleanup of calling conventions. 
+No more `cdecl/stdcall/fastcall/thiscall/register/safecall` madness - just a single "x64 calling convention". 

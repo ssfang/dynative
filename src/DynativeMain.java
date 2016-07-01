@@ -17,6 +17,11 @@ public class DynativeMain {
 		Jn.ReleaseStringUTFChars(null, 0L);
 		
 		System.out.println("mid = " + mid);
+		
+		Jn.registerNativeMethodStub(ms.getMethod("test"));
+		Jn.test(22, 26, 28, 66, 68);
+		Jn.test(22, 26, 28, 66, 68);
+		Jn.test(22, 26, 28, 66, 68);
 	}
 
 	static {

@@ -85,7 +85,9 @@ public class Jn {
 			}
 		}
 	}
-
+	
+	public native static void test(int a, int b, int c, int d, int f);
+	
 	/**
 	 * Converts a java.lang.reflect.Field to a field ID.
 	 * 
@@ -176,10 +178,11 @@ public class Jn {
 	static int resolveNativeMethod(Method method, Object methodClass) {
 
 		int size = 0;
-		for (Class<?> type : method.getParameterTypes()) {
-			size += MappedType.of(type).getType().size();
+		Class<?>[] parameterTypes = method.getParameterTypes();
+		for (int idx = parameterTypes.length; --idx >= 2;) {
+			size += MappedType.of(parameterTypes[idx]).getType().size();
 		}
-		//System.out.println("========resolveNativeMethod=========");
+		System.out.println("resolveNativeMethod(" + method + ") `add %rax, %rsp` with rax = " + size);
 		return size;
 	}
 
