@@ -48,6 +48,40 @@ XMM6:XMM15	非易失的	必须根据需要由被调用方保留。
 
 48 c7 c0 78 56 34 12  mov    $0x12345678,%rax
 
+f3 0f 11 45 00  movss  %xmm0,0x0(%rbp)
+f3 0f 11 45 fc  movss  %xmm0,-0x4(%rbp)
+
+48 8d 64 24 f8   lea    -0x8(%rsp),%rsp
+
+f2 0f 11 04 24     movsd  %xmm0,(%rsp)
+f2 0f 11 0c 24     movsd  %xmm1,(%rsp)
+f2 0f 11 14 24     movsd  %xmm2,(%rsp)
+f2 0f 11 1c 24     movsd  %xmm3,(%rsp)
+f2 0f 11 24 24     movsd  %xmm4,(%rsp)
+f2 0f 11 2c 24     movsd  %xmm5,(%rsp)
+f2 0f 11 34 24     movsd  %xmm6,(%rsp)
+f2 0f 11 3c 24     movsd  %xmm7,(%rsp)
+f2 44 0f 11 04 24     movsd  %xmm8,(%rsp)
+f2 44 0f 11 0c 24     movsd  %xmm9,(%rsp)
+
+48 83 ec 08 sub    $0x8,%rsp
+ f2 0f 11 04 24        movsd  %xmm0,(%rsp)
+ f2 0f 11 4c 24 08     movsd  %xmm1,0x8(%rsp)
+ f2 0f 11 54 24 10     movsd  %xmm2,0x10(%rsp)
+ f2 0f 11 5c 24 18     movsd  %xmm3,0x18(%rsp)
+ f2 0f 11 64 24 20     movsd  %xmm4,0x20(%rsp)
+ f2 0f 11 6c 24 28     movsd  %xmm5,0x28(%rsp)
+ f2 0f 11 74 24 30     movsd  %xmm6,0x30(%rsp)
+ f2 0f 11 7c 24 38     movsd  %xmm7,0x38(%rsp)
+ f2 44 0f 11 44 24 40  movsd  %xmm8,0x40(%rsp)
+ f2 44 0f 11 4c 24 48  movsd  %xmm9,0x48(%rsp)
+
+48 83 c4 20 add    $0x20,%rsp
+
+f2 0f 11 4c 24 f8  movsd  %xmm1,-0x8(%rbp)
+f2 0f 11 54 24 f0  movsd  %xmm2,-0x10(%rbp)
+f2 0f 11 5c 24 e8  movsd  %xmm3,-0x18(%rbp)
+
 ;; jmp *$0x1234567890 ; Error: immediate operand illegal with absolute jump
 ff e0 jmpq   *%rax ; indirect jmp need prefix `*' Or Warning: indirect jmp without `*'
 ff e1 jmpq   *%rcx ; indirect jmp need prefix `*' Or Warning: indirect jmp without `*'
@@ -95,3 +129,8 @@ objdump -d test.o
 [Stack frame layout on x86-64](http://eli.thegreenplace.net/2011/09/06/stack-frame-layout-on-x86-64/)
 Another important change that was made in the Windows x64 ABI is the cleanup of calling conventions. 
 No more `cdecl/stdcall/fastcall/thiscall/register/safecall` madness - just a single "x64 calling convention". 
+
+This link [What are the calling conventions for UNIX & Linux system calls on x86-64](http://stackoverflow.com/questions/2535989/what-are-the-calling-conventions-for-unix-linux-system-calls-on-x86-64) mentions references about calling conventions: 
+
+* This document is good overview of all the different conventions: http://www.agner.org/optimize/calling_conventions.pdf
+* 

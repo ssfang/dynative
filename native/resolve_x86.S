@@ -18,7 +18,6 @@ stubthunk_interpret_stdcall_x86:
  	push   0x8(%ebp)	/* JNIEnv *env */
 	call   dispatch
 
- 	leave	/* restore the local scoped stack frame considering `call dispatch`*/
- 	leave	/* restore the stack frame of the interpreted stdcall */
+ 	leave	/* restore the stack frame */
  	ret
 #endif

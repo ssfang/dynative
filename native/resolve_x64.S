@@ -5,6 +5,7 @@ https://gcc.gnu.org/onlinedocs/gcc/Overall-Options.html
 file.s          Assembler code.
 file.S, file.sx Assembler code that must be preprocessed.
 
+http://www.sourceware.org/binutils/docs-2.12/as.info/Preprocessing.html#Preprocessing
 */
 #ifdef __x86_64__
 
@@ -12,10 +13,6 @@ file.S, file.sx Assembler code that must be preprocessed.
 
 /**int dispatch(JNIEnv *env, jclass receiver, jmethodID mid);*/
 .extern dispatch
-.extern printf
-
-format:
-        .asciz  "%20ld\n"
 
 stubthunk_interpret_stdcall_x64:
 	push   %rbp					/* 55 */
@@ -34,7 +31,6 @@ stubthunk_interpret_stdcall_x64:
 	pop    %rdx
 	pop    %rcx
 
- 	leave	/* restore the local scoped stack frame considering `call dispatch`*/
- 	add    %rax, %rsp /* TODO here wrong, be deliberate!! restore the stack frame of the interpreted stdcall */
+ 	leave	/* restore the stack frame */
  	ret
 #endif

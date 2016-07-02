@@ -85,9 +85,9 @@ public class Jn {
 			}
 		}
 	}
-	
+
 	public native static void test(int a, int b, int c, int d, int f);
-	
+
 	/**
 	 * Converts a java.lang.reflect.Field to a field ID.
 	 * 
@@ -167,13 +167,11 @@ public class Jn {
 			String methodSignature);
 
 	/**
-	 * )
-	 * 
 	 * @param method
 	 * @param receiver
 	 *            if the method is a static method, it just denotes a class, otherwise, the method is an
 	 *            instance method and it represents an instance or is called "this" pointer.
-	 * @return arguments size to balance the stack.
+	 * @return arguments size to maintain the stack.
 	 */
 	static int resolveNativeMethod(Method method, Object methodClass) {
 
