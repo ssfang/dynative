@@ -37,6 +37,7 @@ jclass C_ss_Jn;
 jmethodID M_ss_Jn_resolveNativeMethod;
 
 int dispatch(JNIEnv *env, jclass receiver, jmethodID mid) ASM("dispatch");
+void *invoke_win64(JNIEnv *env, jclass coi, void *savedRBPSlot, void *callContext) ASM("invoke_win64");
 
 #define st_placeholder(x) 0
 

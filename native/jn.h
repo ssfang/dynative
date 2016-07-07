@@ -240,4 +240,13 @@ struct arraytype {
 	StMeta *hmeta;
 };
 
+typedef struct _CallContext{
+	unsigned short nargs;
+	char retsig;
+	unsigned char retnt;
+	int stacksize;
+	StMeta *hmeta;
+	char args[];
+}CallContext;
+
 #endif

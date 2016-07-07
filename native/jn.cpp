@@ -69,7 +69,7 @@ public:
 		this->p = p;
 	}
 
-	void MarshalToJObject(JNIEnv *env, StMeta *meta, jobject jobj) {
+	void MarshalToJObject(JNIEnv *env, const StMeta *meta, jobject jobj) {
 		asserts(NULL != jobj);
 		if (UNLIKELY(NULL == jobj)) {
 			return;
@@ -77,7 +77,7 @@ public:
 		//D_PRINT("StMeta: len = %d\n", meta->len);
 		jobject joMember;
 		jfieldID* pMemberFieldId = (jfieldID*) meta->mem;
-		char *pmeta = meta->mem + meta->len * sizeof(jfieldID);
+		const char *pmeta = meta->mem + meta->len * sizeof(jfieldID);
 		for (int idx = 0; idx < meta->len; idx++) {
 			char jsig = ((primitivetype*) pmeta)->sig;
 			// D_PRINT("Field[%d]: sig = %c\n", idx, jsig);
@@ -219,3 +219,147 @@ public:
 		}
 	}
 };
+
+/*
+ lower addresses
+ rsp +--------------------+
+ | return_address     |
+ +--------------------+
+ | ...                |
+ args->+--------------------+
+ | marshaled_param1   | args[0] will be put in rcx and xmm0
+ +--------------------+
+ | marshaled_param2   | args[1] will be put in rdx and xmm1
+ +--------------------+
+ | marshaled_param3   | args[2] will be put in r8 and xmm2
+ +--------------------+
+ | marshaled_param4   | args[3] will be put in r9 and xmm3, args[3] = [rsp] and then rsp = &args[3]
+ +--------------------+
+ | marshaled_param5   |
+ +--------------------+
+ | ...                |
+ +--------------------+
+ | marshaled_paramN   |
+ +--------------------+
+ higher addresses
+
+ call asm code, it can be cast to a function pointer with any return type that you should know in advance.
+ */
+extern "C" void st_call_win64(void *args, void *target) ASM("st_call_win64");
+
+/* define some function signatures for st_call_win64, ... */
+typedef int (*FnCallIntTarget)(void *args, void *func);
+typedef long (*FnCallLongTarget)(void *args, void *func);
+typedef float (*FnCallFloatTarget)(void *args, void *func);
+typedef double (*FnCallDoubleTarget)(void *args, void *func);
+typedef void* (*FnCallPointerTarget)(void *args, void *func);
+
+typedef struct _CallMeta CallMeta;
+typedef union _Slot Slot;
+typedef struct _MetaHeader MetaHeader;
+typedef struct _MetaObj MetaObj;
+
+union _Slot {
+	void *ptr;
+	intptr_t i;
+	char *pb;
+	Slot *offset(size_t off) {
+		return REINTERPRET_CAST(Slot *, pb + off);
+	}
+};
+
+struct _MetaHeader {
+	const char sig;
+	union {
+		const char type;
+		const unsigned char flag;
+	};
+	union {
+		const short size;
+		const short extra_offset;
+	};
+};
+
+struct _CallMeta {
+	const unsigned short nargs;
+	const char retsig;
+	const char rettype;
+	const int stack_args_size;
+	const StMeta *retmeta;
+	void* target;
+	MetaHeader argmetas[0];
+};
+
+struct _MetaObj {
+	int size;
+	StMeta *meta;
+};
+
+
+#define ASM_END_STACK(rsp, retaddr)
+//https://gcc.gnu.org/onlinedocs/gcc/Constraints.html
+#define ASM_RET_INT(i) __asm__ __volatile("mov %0, %%rax\n\t""ret\n\t": :"m" (i))
+#define ASM_RET_FLT(i) __asm__ __volatile("mov %0, %%xmm0\n\t""ret\n\t": :"m" (i))
+
+void interpret_win64(JNIEnv *env, jclass receiver, CallMeta *callmeta, Slot *slots) {
+
+	Slot *pslot = slots->offset(40 + callmeta->stack_args_size);
+	int idx;
+	for (idx = callmeta->nargs; --idx >= 0;) {
+		char sig = callmeta->argmetas[idx].sig;
+		switch (sig) {
+		case 'L': {
+			const MetaHeader *pmeta = callmeta->argmetas + idx;
+			const MetaObj *pExtraMeta = (MetaObj*) ((const char*) pmeta + 4 * pmeta->extra_offset);
+			void *buf = alloca(pExtraMeta->size);
+			CRaw(buf).MarshalFromJObject(env, pExtraMeta->meta, (jobject) pslot->ptr);
+			pslot->ptr = buf;
+		}
+
+			break;
+		case '[':
+			break;
+		case 'F':
+		case 'D':
+			if (idx < 2) {
+				pslot->ptr = slots->offset((1 + idx) * 8)->ptr;
+			}
+			break;
+		default:
+			break;
+		}
+
+	}
+
+	if (callmeta->retsig == 'L' || callmeta->retsig == '[') {
+		//void *ret = ((void (*)(void*, void*))call_target)(pslot, callmeta->target);
+		void *ret = ((FnCallPointerTarget) st_call_win64)(pslot, callmeta->target);
+		const StMeta *meta = callmeta->retmeta;
+		jobject jobj ;
+		if(meta->ctor){
+			jobj = jniNewObject(env, meta->cls, meta->ctor);
+		}else{
+			jobj = jniAllocObject(env, meta->cls);
+		}
+		CRaw(ret).MarshalToJObject(env, callmeta->retmeta, jobj);
+		ASM_END_STACK(0, slots[0]);
+		ASM_RET_INT(jobj);
+	} else {
+
+	}
+
+}
+
+void resolve_interpret_win64(JNIEnv *env, jclass receiver, jmethodID mid, Slot *slots) {
+	nativetrace(_T("resolve_interpret_win64(env@%p, receiver@%p,  mid@%p, slots@%p)\n"), env, receiver, mid, slots);
+	jclass jcls = jniGetObjectClass(env, receiver);
+	jclass jcls2 = jniGetObjectClass(env, jcls);
+	jboolean isStaticMethod = jniIsSameObject(env, jcls, jcls2);
+	jobject jmethod = jniToReflectedMethod(env, isStaticMethod ? receiver : jcls, mid, isStaticMethod);
+	CallMeta *callmeta = REINTERPRET_CAST(CallMeta*,
+			jniCallStaticLongMethod(env, C_ss_Jn, M_ss_Jn_resolveNativeMethod, jmethod, receiver));
+	nativetrace(_T("-resolve_interpret_win64, %p, isStaticMethod = %d, CallMeta@%p\n"),
+			mid, isStaticMethod, callmeta);
+	interpret_win64(env, receiver, callmeta, slots);
+}
+
