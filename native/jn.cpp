@@ -263,6 +263,7 @@ union _Slot {
 	void *ptr;
 	intptr_t i;
 	char *pb;
+	double d;
 	Slot *offset(size_t off) {
 		return REINTERPRET_CAST(Slot *, pb + off);
 	}
@@ -295,15 +296,43 @@ struct _MetaObj {
 	StMeta *meta;
 };
 
+/* This is a stack frame after called, or rather, the call instruction is executed. */
+typedef struct _CalledStackFrame {
+	Slot returnAddress;
+
+	/* The parameter area(it will always be adjacent to the return address during any function call)*/
+
+	/* Register parameter stack area / C's register parameters shadow space,
+	 * which, the four entries space is always allocated regardless of the number
+	 * of parameters(that is, even if the called function has fewer than 4 parameters,
+	 * these 4 stack locations are effectively owned by the called function), and can
+	 * be used by the called function for any purpose(such as saving parameter register
+	 * values).Thus the caller may not save information in this region of stack across
+	 * a function call.
+	 */
+	union {
+		struct {
+			Slot rcxHome;
+			Slot rdxHome;
+			Slot r8Home;
+			Slot r9Home;
+		};
+		Slot shadow[4];
+	};
+
+	/* the 5th, 6th, ... parameter */
+	Slot stackParameters[];
+} CalledStackFrame;
 
 #define ASM_END_STACK(rsp, retaddr)
 //https://gcc.gnu.org/onlinedocs/gcc/Constraints.html
 #define ASM_RET_INT(i) __asm__ __volatile("mov %0, %%rax\n\t""ret\n\t": :"m" (i))
-#define ASM_RET_FLT(i) __asm__ __volatile("mov %0, %%xmm0\n\t""ret\n\t": :"m" (i))
+#define ASM_RET_FLT(f) __asm__ __volatile("mov %0, %%xmm0\n\t""ret\n\t": :"m" (f))
 
-void interpret_win64(JNIEnv *env, jclass receiver, CallMeta *callmeta, Slot *slots) {
+void interpret_win64(JNIEnv *env, jclass receiver, CallMeta *callmeta, CalledStackFrame *frame) {
 
-	Slot *pslot = slots->offset(40 + callmeta->stack_args_size);
+	Slot *pslot = frame->stackParameters + callmeta->stack_args_size;
+	Slot *args = (Slot *)alloca(callmeta->nargs);
 	int idx;
 	for (idx = callmeta->nargs; --idx >= 0;) {
 		char sig = callmeta->argmetas[idx].sig;
@@ -322,7 +351,7 @@ void interpret_win64(JNIEnv *env, jclass receiver, CallMeta *callmeta, Slot *slo
 		case 'F':
 		case 'D':
 			if (idx < 2) {
-				pslot->ptr = slots->offset((1 + idx) * 8)->ptr;
+				args[idx] = frame->shadow[idx];
 			}
 			break;
 		default:
@@ -335,10 +364,10 @@ void interpret_win64(JNIEnv *env, jclass receiver, CallMeta *callmeta, Slot *slo
 		//void *ret = ((void (*)(void*, void*))call_target)(pslot, callmeta->target);
 		void *ret = ((FnCallPointerTarget) st_call_win64)(pslot, callmeta->target);
 		const StMeta *meta = callmeta->retmeta;
-		jobject jobj ;
-		if(meta->ctor){
+		jobject jobj;
+		if (meta->ctor) {
 			jobj = jniNewObject(env, meta->cls, meta->ctor);
-		}else{
+		} else {
 			jobj = jniAllocObject(env, meta->cls);
 		}
 		CRaw(ret).MarshalToJObject(env, callmeta->retmeta, jobj);
@@ -350,8 +379,8 @@ void interpret_win64(JNIEnv *env, jclass receiver, CallMeta *callmeta, Slot *slo
 
 }
 
-void resolve_interpret_win64(JNIEnv *env, jclass receiver, jmethodID mid, Slot *slots) {
-	nativetrace(_T("resolve_interpret_win64(env@%p, receiver@%p,  mid@%p, slots@%p)\n"), env, receiver, mid, slots);
+void just_interpret_win64(JNIEnv *env, jclass receiver, jmethodID mid, CalledStackFrame *frame) {
+	nativetrace(_T("resolve_interpret_win64(env@%p, receiver@%p,  mid@%p, frame@%p)\n"), env, receiver, mid, frame);
 	jclass jcls = jniGetObjectClass(env, receiver);
 	jclass jcls2 = jniGetObjectClass(env, jcls);
 	jboolean isStaticMethod = jniIsSameObject(env, jcls, jcls2);
@@ -360,6 +389,6 @@ void resolve_interpret_win64(JNIEnv *env, jclass receiver, jmethodID mid, Slot *
 			jniCallStaticLongMethod(env, C_ss_Jn, M_ss_Jn_resolveNativeMethod, jmethod, receiver));
 	nativetrace(_T("-resolve_interpret_win64, %p, isStaticMethod = %d, CallMeta@%p\n"),
 			mid, isStaticMethod, callmeta);
-	interpret_win64(env, receiver, callmeta, slots);
+	interpret_win64(env, receiver, callmeta, frame);
 }
 

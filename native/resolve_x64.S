@@ -8,6 +8,10 @@ file.S, file.sx Assembler code that must be preprocessed.
 http://www.sourceware.org/binutils/docs-2.12/as.info/Preprocessing.html#Preprocessing
 */
 
+#include "resolve.S"
+
+#ifdef INCLUDE_resolve_x64
+
 #if defined(SYMBOL_UNDERSCORE)
 #define GLOBL_SYMBOL(x) _##x
 #else
@@ -55,8 +59,22 @@ st_call_win64:
 
 	pop %rsp
 
-st_return_win64:
+stub_interpret_win64:
+	mov  %r8, 24(%rsp)
+	mov  %r9, 32(%rsp)
+	movq %xmm2, 16(%rsp)
+	movq %xmm3, 8(%rsp)
 
+	/* Reuse the first two parameters on registers of last call.
+	   param1: JNIEnv env@rcx;
+	   param2: jclass cls@rdx;
+	 */
+	mov %r10, %r8 /* param3: Stub *stub/CallMeta *meta; on register  */
+	mov %rsp, %r9 /* param4: CalledStackFrame *frame;   on register  */
+	sub $32, %rsp /* shadow space                       on stack(32) */
+	call *%rax
+	add $32, %rsp /* restore stack */
+	ret
 
 stubthunk_interpret_stdcall_x64:
 	push   %rbp					/* 55 */
@@ -258,3 +276,5 @@ stubthunk_jmp_target_win64:
 	movd %r9, %xmm3 /* if param4 is a float point  */
 
 	jmp *%rax			/* Jump directly to the target function entry. */
+
+#endif

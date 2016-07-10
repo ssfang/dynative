@@ -30,7 +30,7 @@
 							<targetPlatform binaryParser="org.eclipse.cdt.core.Cygwin_PE;org.eclipse.cdt.core.PE;org.eclipse.cdt.core.ELF;org.eclipse.cdt.core.GNU_ELF" id="cdt.managedbuild.target.gnu.platform.cygwin.so.debug.383690725" name="Debug Platform" superClass="cdt.managedbuild.target.gnu.platform.cygwin.so.debug"/>
 							<builder buildPath="${workspace_loc:/dynative}/Debug" id="cdt.managedbuild.target.gnu.builder.cygwin.so.debug.933220389" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" superClass="cdt.managedbuild.target.gnu.builder.cygwin.so.debug"/>
 							<tool command="x86_64-w64-mingw32-gcc" id="cdt.managedbuild.tool.gnu.assembler.cygwin.so.debug.1662354844" name="GCC Assembler" superClass="cdt.managedbuild.tool.gnu.assembler.cygwin.so.debug">
-								<option id="gnu.both.asm.option.flags.901081553" superClass="gnu.both.asm.option.flags" useByScannerDiscovery="false" value="-c" valueType="string"/>
+								<option id="gnu.both.asm.option.flags.901081553" name="Assembler flags" superClass="gnu.both.asm.option.flags" useByScannerDiscovery="false" value="-c" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.1415013121" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.archiver.cygwin.base.1738750990" name="GCC Archiver" superClass="cdt.managedbuild.tool.gnu.archiver.cygwin.base"/>
@@ -65,7 +65,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="native/asm" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="DebugX64/native/WinX64CallingConvention" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -126,7 +126,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="native/asm|native/resolve_x86.S" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="DebugX64/native/WinX64CallingConvention|native/asm|native/resolve_x86.S" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

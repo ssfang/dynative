@@ -1,5 +1,7 @@
 
-#ifdef __i386__
+#include "resolve.S"
+
+#ifdef INCLUDE_resolve_x86
 
 .globl stubthunk_interpret_stdcall_x86
 .extern dispatch
@@ -20,4 +22,5 @@ stubthunk_interpret_stdcall_x86:
 
  	leave	/* restore the stack frame */
  	ret
+
 #endif

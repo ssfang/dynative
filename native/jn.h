@@ -55,7 +55,7 @@
 #define ASSERT_SHOULD_NEVER_REACH() asserts(0, "should never reach here")
 
 //https://en.wikipedia.org/wiki/Data_structure_alignment#Computing_padding
-//Compute an `align`-bytes aligned address for `addr`
+//Compute an `align`-bytes aligned address for `addr`, here `-align = ~((align) - 1))`
 #define ALIGN_DOWN(addr, align) ((((intptr_t) (addr))) & ~((align) - 1))
 #define ALIGN_UP(addr, align) ((((intptr_t) (addr)) + ((align) - 1)) & ~((align) - 1))
 
