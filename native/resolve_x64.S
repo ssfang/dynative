@@ -21,9 +21,16 @@ http://www.sourceware.org/binutils/docs-2.12/as.info/Preprocessing.html#Preproce
 
 .globl st_call_win64
 .globl stubthunk_interpret_stdcall_x64
+.globl stub_just_interpret_win64
+.globl stub_interpret_win64
 
 /**int dispatch(JNIEnv *env, jclass receiver, jmethodID mid);*/
 .extern dispatch
+
+/** just_interpret_win64(JNIEnv *env, jclass receiver, stub_x64 *stub, CalledStackFrame *frame) */
+.extern just_interpret_win64
+/** interpret_win64(JNIEnv *env, jclass receiver, stub_x64 *stub, CalledStackFrame *frame) */
+.extern interpret_win64
 
 #define RCX %##rcx
 #define RDX %##rdx
@@ -59,7 +66,21 @@ st_call_win64:
 
 	pop %rsp
 
+
+/*
+ Parameters:
+  RAX pointer to `stub_x64`
+*/
+
+stub_just_interpret_win64:
+	mov $just_interpret_win64, %r10
+	jmp stub_preinterpret_win64
+
 stub_interpret_win64:
+	mov $interpret_win64, %r10
+
+stub_preinterpret_win64:
+	/* Use register shadow stack space to save extra register parameters that maybe exist */
 	mov  %r8, 24(%rsp)
 	mov  %r9, 32(%rsp)
 	movq %xmm2, 16(%rsp)
@@ -69,12 +90,13 @@ stub_interpret_win64:
 	   param1: JNIEnv env@rcx;
 	   param2: jclass cls@rdx;
 	 */
-	mov %r10, %r8 /* param3: Stub *stub/CallMeta *meta; on register  */
+	mov %rax, %r8 /* param3: stub_x64 *stub;            on register  */
 	mov %rsp, %r9 /* param4: CalledStackFrame *frame;   on register  */
 	sub $32, %rsp /* shadow space                       on stack(32) */
-	call *%rax
+	call *%r10
 	add $32, %rsp /* restore stack */
 	ret
+
 
 stubthunk_interpret_stdcall_x64:
 	push   %rbp					/* 55 */

@@ -1,6 +1,37 @@
 #include <assert.h>
+
+/* defined before <stdint.h> is included*/
+#define __STDC_LIMIT_MACROS //
 /* expect int32_t, uintptr_t, INT32_MAX ...*/
 #include <stdint.h>
+
+/*
+## Printf and scanf format specifiers
+
+### Printf format string
+
+The macros are in the format PRI{fmt}{type}. Here {fmt} defines the output formatting
+and is one of d (decimal), x (hexadecimal), o (octal), u (unsigned) and i (integer).
+{type} defines the type of the argument and is one of N, FASTN, LEASTN, PTR, MAX, where
+N corresponds to the number of bits in the argument.
+
+### Scanf format string
+
+The macros are in the format SCN{fmt}{type}. Here {fmt} defines the output formatting
+and is one of d (decimal), x (hexadecimal), o (octal), u (unsigned) and i (integer).
+{type} defines the type of the argument and is one of N, FASTN, LEASTN, PTR, MAX, where
+N corresponds to the number of bits in the argument.
+
+[Fixed width integer types](http://en.cppreference.com/w/c/types/integer)
+[C data types](https://en.wikipedia.org/wiki/C_data_types#inttypes.h)
+*/
+#if __cplusplus > 199711L
+# include <cinttypes>
+#else
+// #define __STDC_FORMAT_MACROS // defined before <inttypes.h> is included
+# include <inttypes.h>
+#endif
+
 #include <string.h>
 
 #include <jni.h>
@@ -86,13 +117,19 @@
 
 /* Useful for eliminating compiler warnings, forcedly reinterpret cast */
 #define FUNC2PTR(f) ((void*)f)
+/* c++11 -Wnarrowing */
+#define INS_BYTE(b) (char)(b)
+#define STUB_TRACE printf
 
 //[attribute packed broken on mingw32?](https://gcc.gnu.org/bugzilla/show_bug.cgi?id=52991)
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #define HAVE_PRAGMA_PACK
 #endif
 
-#define nativetrace(...) //printf
+//http://stackoverflow.com/questions/5588855/standard-alternative-to-gccs-va-args-trick
+//C99 does not allow the variable argument part to be empty
+
+#define nativetrace(fmt, ...) do {printf(fmt, ##__VA_ARGS__); fflush(stdout); } while(0)
 
 #ifdef __cplusplus
 extern "C" {
@@ -134,8 +171,8 @@ typedef struct CStMeta {
 # define stubthunk_init stubthunk_x86_init
 #elif defined(__x86_64__) || defined(_M_X64) || defined(_M_AMD64)
 # define SUPPORT_X64
-# define stubthunk stubthunk_x64
-# define stubthunk_init stubthunk_x64_init
+# define stubthunk stub_x64
+# define stubthunk_init stub_x64_init
 #else
 # error Unsupported architecture
 #endif
@@ -174,25 +211,40 @@ void stubthunk_x86_init(stubthunk_x86 *stub, jmethodID mid);
 // RCX, RDX, R8, R9 Volatile First 4 integer parameters
 // R10:R11 Volatile Must be preserved as needed by caller; used in syscall/sysret instructions
 // R12:R15 Nonvolatile Must be preserved by callee
-typedef struct GNU_ATTR(__packed__) _stubthunk_x64 {
-	struct GNU_ATTR(__packed__) {
-		uint8_t mov_r10_imm64[2];  // 49 BA
-		uint64_t ph_mid; // placeholder
-	};
-	struct GNU_ATTR(__packed__) {
-		uint8_t mov_rax_imm64[2];  // 48 B8
-		uint64_t ph_dispatch; // placeholder
-	};
-	uint8_t jmp_rax[2]; // FF E0
-	uint8_t pad[2]; //09 00
-} stubthunk_x64;
 
-// I worry a bit the complier do unexpectedly
-union verify_stubthunk_x64_size_manually {
-	char stubthunk_size[24 == sizeof(stubthunk_x64) ? 1 : -1];
-};
+/* specified size type members to guarantee correctness of x64 instructions, similar
+   to that a x86 compiler can produce codes run on a x64 target platform.
+*/
+typedef struct _stub_x64{
+  struct{
+    int8_t mov_rAX_Iv[2];   // 48 B8
+    int8_t stub_address[8]; // address of this stub(ps: use byte array to keep 1-byte alignment)
+  };
+  struct{
+    int8_t jmp_Ev[2];             // ff 60
+    int8_t field_detour_offset;  // offsetof(stub, detour) = 16. = 0x10
+  };
 
-void stubthunk_x64_init(stubthunk_x64 *stub, jmethodID mid);
+  int8_t pad[3];
+
+  /* `just_interpret_win64` or `interpret_win64`.
+     `just_interpret_win64` is a synchronized method against `class`,
+     and will self-modify the `detour` value from `just_interpret_win64`
+     to `interpret_win64`, so it's harmless race.
+  */
+  int64_t detour;       // entry address of detour
+  union{
+    int64_t mid;      //
+    int64_t meta;     //
+  };
+}stub_x64;
+
+// I worry a bit the complier do unexpectedly or environment(on x86)
+//union verify_stub_x64_size_manually {
+//  char guarantee_stub_size[32 == sizeof(stub_x64) ? 1 : -1];
+//};
+
+void stub_x64_init(stub_x64 *stub, jmethodID mid);
 
 #endif // end SUPPORT_X64
 

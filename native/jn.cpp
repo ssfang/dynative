@@ -6,6 +6,120 @@ jclass C_ss_Jn;
 jmethodID M_ss_Jn_resolveNativeMethod;
 }
 
+/* define some function signatures for st_call_win64, ... */
+typedef int (*FnCallIntTarget)(void *args, void *func);
+typedef long (*FnCallLongTarget)(void *args, void *func);
+typedef float (*FnCallFloatTarget)(void *args, void *func);
+typedef double (*FnCallDoubleTarget)(void *args, void *func);
+typedef void* (*FnCallPointerTarget)(void *args, void *func);
+
+typedef struct _CallMeta CallMeta;
+typedef union _Slot Slot;
+typedef struct _MetaHeader MetaHeader;
+typedef struct _MetaObj MetaObj;
+typedef struct _CalledStackFrame CalledStackFrame;
+
+/*
+ lower addresses
+ rsp +--------------------+
+ | return_address     |
+ +--------------------+
+ | ...                |
+ args->+--------------------+
+ | marshaled_param1   | args[0] will be put in rcx and xmm0
+ +--------------------+
+ | marshaled_param2   | args[1] will be put in rdx and xmm1
+ +--------------------+
+ | marshaled_param3   | args[2] will be put in r8 and xmm2
+ +--------------------+
+ | marshaled_param4   | args[3] will be put in r9 and xmm3, args[3] = [rsp] and then rsp = &args[3]
+ +--------------------+
+ | marshaled_param5   |
+ +--------------------+
+ | ...                |
+ +--------------------+
+ | marshaled_paramN   |
+ +--------------------+
+ higher addresses
+
+ call asm code, it can be cast to a function pointer with any return type that you should know in advance.
+ */
+extern "C" void st_call_win64(void *args, void *target) ASM("st_call_win64");
+void just_interpret_win64(JNIEnv *env, jclass receiver, stub_x64 *stub, CalledStackFrame *frame)
+		ASM("just_interpret_win64");
+void interpret_win64(JNIEnv *env, jclass receiver, stub_x64 *stub, CalledStackFrame *frame)
+		ASM("interpret_win64");
+
+union _Slot {
+	void *ptr;
+	intptr_t i;
+	char *pb;
+	double d;
+	Slot *offset(size_t off) {
+		return REINTERPRET_CAST(Slot *, pb + off);
+	}
+};
+
+struct _MetaHeader {
+	const char sig;
+	union {
+		const char type;
+		const unsigned char flag;
+	};
+	union {
+		const short size;
+		const short extra_offset;
+	};
+};
+
+struct _CallMeta {
+	const unsigned short nargs;
+	const char retsig;
+	const char rettype;
+	const int stack_args_size;
+	const StMeta *retmeta;
+	void* target;
+	MetaHeader argmetas[0];
+};
+
+struct _MetaObj {
+	int size;
+	StMeta *meta;
+};
+
+/* This is a stack frame after called, or rather, the call instruction is executed. */
+struct _CalledStackFrame {
+	Slot returnAddress;
+
+	/* The parameter area(it will always be adjacent to the return address during any function call)*/
+
+	/* Register parameter stack area / C's register parameters shadow space,
+	 * which, the four entries space is always allocated regardless of the number
+	 * of parameters(that is, even if the called function has fewer than 4 parameters,
+	 * these 4 stack locations are effectively owned by the called function), and can
+	 * be used by the called function for any purpose(such as saving parameter register
+	 * values).Thus the caller may not save information in this region of stack across
+	 * a function call.
+	 */
+	union {
+		struct {
+			Slot rcxHome;
+			Slot rdxHome;
+			Slot r8Home;
+			Slot r9Home;
+		};
+		Slot shadow[4];
+	};
+
+	/* the 5th, 6th, ... parameter */
+	Slot stackParameters[];
+};
+
+#define ASM_END_STACK(rsp, retaddr)
+//https://gcc.gnu.org/onlinedocs/gcc/Constraints.html
+#define ASM_RET_INT(i) __asm__ __volatile("mov %0, %%rax\n\t""ret\n\t": :"m" (i))
+#define ASM_RET_FLT(f) __asm__ __volatile("mov %0, %%xmm0\n\t""ret\n\t": :"m" (f))
+
 //http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/functions.html#registering_native_methods
 JNIEXPORT jint JNICALL Java_ss_Jn_registerNativeMethodStub(JNIEnv *env, jclass cls, jobject method,
 		jclass clazz, jstring name, jstring signature) {
@@ -24,6 +138,7 @@ JNIEXPORT jint JNICALL Java_ss_Jn_registerNativeMethodStub(JNIEnv *env, jclass c
 
 	jniReleaseStringUTFChars(env, name, utfName);
 	jniReleaseStringUTFChars(env, signature, utfSignature);
+	nativetrace("END Java_ss_Jn_registerNativeMethodStub\n");
 	return retval;
 }
 
@@ -220,119 +335,13 @@ public:
 	}
 };
 
-/*
- lower addresses
- rsp +--------------------+
- | return_address     |
- +--------------------+
- | ...                |
- args->+--------------------+
- | marshaled_param1   | args[0] will be put in rcx and xmm0
- +--------------------+
- | marshaled_param2   | args[1] will be put in rdx and xmm1
- +--------------------+
- | marshaled_param3   | args[2] will be put in r8 and xmm2
- +--------------------+
- | marshaled_param4   | args[3] will be put in r9 and xmm3, args[3] = [rsp] and then rsp = &args[3]
- +--------------------+
- | marshaled_param5   |
- +--------------------+
- | ...                |
- +--------------------+
- | marshaled_paramN   |
- +--------------------+
- higher addresses
+void interpret_win64(JNIEnv *env, jclass receiver, stub_x64 *pstub, CalledStackFrame *frame) {
+	nativetrace("interpret_win64 was called\n");
+	return;
 
- call asm code, it can be cast to a function pointer with any return type that you should know in advance.
- */
-extern "C" void st_call_win64(void *args, void *target) ASM("st_call_win64");
-
-/* define some function signatures for st_call_win64, ... */
-typedef int (*FnCallIntTarget)(void *args, void *func);
-typedef long (*FnCallLongTarget)(void *args, void *func);
-typedef float (*FnCallFloatTarget)(void *args, void *func);
-typedef double (*FnCallDoubleTarget)(void *args, void *func);
-typedef void* (*FnCallPointerTarget)(void *args, void *func);
-
-typedef struct _CallMeta CallMeta;
-typedef union _Slot Slot;
-typedef struct _MetaHeader MetaHeader;
-typedef struct _MetaObj MetaObj;
-
-union _Slot {
-	void *ptr;
-	intptr_t i;
-	char *pb;
-	double d;
-	Slot *offset(size_t off) {
-		return REINTERPRET_CAST(Slot *, pb + off);
-	}
-};
-
-struct _MetaHeader {
-	const char sig;
-	union {
-		const char type;
-		const unsigned char flag;
-	};
-	union {
-		const short size;
-		const short extra_offset;
-	};
-};
-
-struct _CallMeta {
-	const unsigned short nargs;
-	const char retsig;
-	const char rettype;
-	const int stack_args_size;
-	const StMeta *retmeta;
-	void* target;
-	MetaHeader argmetas[0];
-};
-
-struct _MetaObj {
-	int size;
-	StMeta *meta;
-};
-
-/* This is a stack frame after called, or rather, the call instruction is executed. */
-typedef struct _CalledStackFrame {
-	Slot returnAddress;
-
-	/* The parameter area(it will always be adjacent to the return address during any function call)*/
-
-	/* Register parameter stack area / C's register parameters shadow space,
-	 * which, the four entries space is always allocated regardless of the number
-	 * of parameters(that is, even if the called function has fewer than 4 parameters,
-	 * these 4 stack locations are effectively owned by the called function), and can
-	 * be used by the called function for any purpose(such as saving parameter register
-	 * values).Thus the caller may not save information in this region of stack across
-	 * a function call.
-	 */
-	union {
-		struct {
-			Slot rcxHome;
-			Slot rdxHome;
-			Slot r8Home;
-			Slot r9Home;
-		};
-		Slot shadow[4];
-	};
-
-	/* the 5th, 6th, ... parameter */
-	Slot stackParameters[];
-} CalledStackFrame;
-
-#define ASM_END_STACK(rsp, retaddr)
-//https://gcc.gnu.org/onlinedocs/gcc/Constraints.html
-#define ASM_RET_INT(i) __asm__ __volatile("mov %0, %%rax\n\t""ret\n\t": :"m" (i))
-#define ASM_RET_FLT(f) __asm__ __volatile("mov %0, %%xmm0\n\t""ret\n\t": :"m" (f))
-
-void interpret_win64(JNIEnv *env, jclass receiver, CallMeta *callmeta, CalledStackFrame *frame) {
-
+	CallMeta *callmeta = (CallMeta *) pstub->meta;
 	Slot *pslot = frame->stackParameters + callmeta->stack_args_size;
-	Slot *args = (Slot *)alloca(callmeta->nargs);
+	Slot *args = (Slot *) alloca(callmeta->nargs);
 	int idx;
 	for (idx = callmeta->nargs; --idx >= 0;) {
 		char sig = callmeta->argmetas[idx].sig;
@@ -379,16 +388,26 @@ void interpret_win64(JNIEnv *env, jclass receiver, CallMeta *callmeta, CalledSta
 
 }
 
-void just_interpret_win64(JNIEnv *env, jclass receiver, jmethodID mid, CalledStackFrame *frame) {
-	nativetrace(_T("resolve_interpret_win64(env@%p, receiver@%p,  mid@%p, frame@%p)\n"), env, receiver, mid, frame);
+void just_interpret_win64(JNIEnv *env, jclass receiver, stub_x64 *pstub, CalledStackFrame *frame) {
+	jmethodID mid = (jmethodID) pstub->mid;
+	nativetrace("+just_interpret_win64(env@%p, receiver@%p,  mid@%p, frame@%p)\n", env, receiver, mid, frame);
 	jclass jcls = jniGetObjectClass(env, receiver);
 	jclass jcls2 = jniGetObjectClass(env, jcls);
 	jboolean isStaticMethod = jniIsSameObject(env, jcls, jcls2);
-	jobject jmethod = jniToReflectedMethod(env, isStaticMethod ? receiver : jcls, mid, isStaticMethod);
-	CallMeta *callmeta = REINTERPRET_CAST(CallMeta*,
-			jniCallStaticLongMethod(env, C_ss_Jn, M_ss_Jn_resolveNativeMethod, jmethod, receiver));
-	nativetrace(_T("-resolve_interpret_win64, %p, isStaticMethod = %d, CallMeta@%p\n"),
-			mid, isStaticMethod, callmeta);
-	interpret_win64(env, receiver, callmeta, frame);
+	jclass jcClass = isStaticMethod ? receiver : jcls;
+
+	//TODO safely Monitor
+	if (0 == jniMonitorEnter(env, jcClass)) {
+		jobject jmethod = jniToReflectedMethod(env, jcClass, mid, isStaticMethod);
+		CallMeta *callmeta = REINTERPRET_CAST(CallMeta*,
+				jniCallStaticLongMethod(env, C_ss_Jn, M_ss_Jn_resolveNativeMethod, jmethod, receiver));
+		nativetrace("-just_interpret_win64, %p, isStaticMethod = %d, CallMeta@%p\n", mid, isStaticMethod,
+				callmeta);
+		interpret_win64(env, receiver, pstub, frame);
+
+		jniMonitorExit(env, jcClass);
+	} else {
+		//TODO throw
+	}
 }
 

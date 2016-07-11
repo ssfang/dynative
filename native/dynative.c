@@ -37,7 +37,6 @@ jclass C_ss_Jn;
 jmethodID M_ss_Jn_resolveNativeMethod;
 
 int dispatch(JNIEnv *env, jclass receiver, jmethodID mid) ASM("dispatch");
-void *invoke_win64(JNIEnv *env, jclass coi, void *savedRBPSlot, void *callContext) ASM("invoke_win64");
 
 #define st_placeholder(x) 0
 
@@ -61,35 +60,29 @@ void stubthunk_x86_init(stubthunk_x86 *stub, jmethodID mid) {
 
 #ifdef SUPPORT_X64
 
-#define stubthunk_MID_SLOT rcx
+extern void stub_just_interpret_win64(void) ASM("stub_just_interpret_win64");
+extern void stub_interpret_win64(void) ASM("stub_interpret_win64");
 
-extern void stubthunk_interpret_stdcall_x64(void) ASM("stubthunk_interpret_stdcall_x64");
-
-static const stubthunk_x64 stubthunk_x64_templet = {
-		{ { 0x49, 0xBA }, st_placeholder(imm_ptr_mid) } //mov imm64_mid, %r10
-		, { { 0x48, 0xB8 }, st_placeholder(imm_ptr_dispatch) } //mov imm64_dispatch, %rax
-		, { 0xFF, 0xE0 } //jmp   rax
+static const stub_x64 stub_x64_templet = {
+		{ { INS_BYTE(0x48), INS_BYTE(0xB8) }, {st_placeholder(stub_address)} } //mov imm64_stub_address, %rax
+		, { {INS_BYTE(0xFF), INS_BYTE(0x60)}, offsetof(stub_x64, detour) } //jmp *detour_offset(%rax)
+		, { 0 }
+		, (uintptr_t)FUNC2PTR(stub_just_interpret_win64)
 };
 
-void stubthunk_x64_init(stubthunk_x64 *stub, jmethodID mid) {
-	memcpy(stub, &stubthunk_x64_templet, sizeof(stubthunk_x64));
-	stub->ph_mid = (uint64_t) mid;
-	stub->ph_dispatch = (uint64_t) FUNC2PTR(stubthunk_interpret_stdcall_x64);
-	nativetrace(_T("stubthunk_x64_init(stub@%p, mid@%p), ph_dispatch=%p\n"), stub, mid, stubthunk_interpret_stdcall_x64);
+
+void stub_x64_init(stub_x64 *stub, jmethodID mid) {
+	asserts(NULL != stub && &stub_x64_templet != stub);
+	memcpy(stub, &stub_x64_templet, sizeof(stub_x64));
+	(*(uintptr_t*)(stub->stub_address)) = (uintptr_t)stub;
+	stub->mid = (uintptr_t)mid;
+	nativetrace("stub_x64_init(stub@%p, mid@%p), detour=%p=%" PRId64 "\n", stub, mid, (void*)stub->detour, stub->detour);
 }
 
 #endif
 
 int dispatch(JNIEnv *env, jclass receiver, jmethodID mid) {
-	nativetrace(_T("dispatch(env@%p, receiver@%p,  mid@%p)\n"), env, receiver, mid);
-	jclass jcls = jniGetObjectClass(env, receiver);
-	jclass jcls2 = jniGetObjectClass(env, jcls);
-	jboolean isStaticMethod = jniIsSameObject(env, jcls, jcls2);
-	jobject jmethod = jniToReflectedMethod(env, isStaticMethod ? receiver : jcls, mid, isStaticMethod);
-	jint byteSize = jniCallStaticIntMethod(env, C_ss_Jn, M_ss_Jn_resolveNativeMethod, jmethod, receiver);
-	nativetrace(_T("------dispatch, %p, isStaticMethod = %d, need %d bytes to restore the stack\n"),
-			mid, isStaticMethod, byteSize);
-	return byteSize;
+	return 0;
 }
 
 void stubthunk_call_test(void *stub) {
